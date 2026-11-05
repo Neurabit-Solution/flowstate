@@ -16,6 +16,12 @@ const shared = {
 const configs = [
   {
     ...shared,
+    // Started by coding agents, not by the app. Reads DevState only.
+    entryPoints: ['src/mcp/stdio.ts'],
+    outfile: 'dist/mcp/stdio.js',
+  },
+  {
+    ...shared,
     entryPoints: ['src/main/index.ts'],
     outfile: 'dist/main/index.js',
     // The SDK loads native libraries relative to its own package, so it stays external.
