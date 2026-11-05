@@ -20,6 +20,14 @@ No key? Click **Use sample recording** during onboarding. It works without a key
 
 `npm start -- --demo` shortens the focus threshold to 30 s.
 
+On Ubuntu 23.10 and newer, the first `npm start` stops with a Chromium sandbox error. FlowState keeps the sandbox on and prints the one command that fixes it:
+
+```bash
+sudo chown root:root node_modules/electron/dist/chrome-sandbox && sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+```
+
+Repeat it after any `npm install` that reinstalls Electron.
+
 Scripts: `npm run dev` (rebuild on change, Ctrl+R to reload the window), `npm run lint`, `npm test`.
 
 ## Platforms

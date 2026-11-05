@@ -77,3 +77,13 @@
 - Everything about real breathing data. Steadiness thresholds were only tested on generated recordings, so the 10 minute focus result says the logic works, not that it detects real focus.
 - The tray menu itself (the same code paths were driven from the window). Some GNOME setups hide tray icons, so closing the window while sensing shows a notification.
 - Screen lock handling, which needs a real lock.
+
+## 2026-11-06: Linux sandbox failure on first real launch
+
+Subham's `npm start` aborted with a Chromium SUID sandbox error on Ubuntu 26.04. Ubuntu sets `kernel.apparmor_restrict_unprivileged_userns=1`, so Electron falls back to `chrome-sandbox`, which must be root-owned with mode 4755. My earlier test runs passed only because they inherited a less restricted AppArmor profile from the Claude desktop app, so they did not match a normal terminal. Reproduced with `systemd-run --user`.
+
+**Decisions**
+- Do not pass `--no-sandbox`. It would turn off the renderer sandbox in a camera app. `scripts/launch.mjs` now prints the exact fix instead.
+- Test launches on Linux must run through `systemd-run --user`, or they miss this class of failure.
+
+**For M5:** judges on recent Ubuntu hit this too. An AppImage cannot set the SUID bit, so ship a `.deb` (its install script sets it) and test both from a normal session. Check that this is true of the electron-builder version we use.
