@@ -9,6 +9,7 @@ import type { SignalEvent, SignalListener, SignalSource } from './types';
 
 const MAX_HOLD_MS = 5 * 60_000;
 const DEMO_SCORE_EVERY_US = 5_000_000;
+const AUTH_FAILED = 2;
 /** Sample recordings run faster than real time, so a focus block takes under a minute. */
 export const REPLAY_SPEED = 20;
 
@@ -161,7 +162,7 @@ export class SignalHost {
       if (event.retryable) {
         void this.duty.onRetryableError();
       } else {
-        this.message('error', `SDK error ${event.code}: ${event.message}`);
+        this.message('error', event.code === AUTH_FAILED ? 'Presage rejected the API key. Replace it in Settings.' : `SDK error ${event.code}: ${event.message}`);
         void this.stopSensing();
       }
     }

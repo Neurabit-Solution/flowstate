@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { safeStorage } from 'electron';
+import { apiKeyProblem } from './api-key';
 import { DEFAULT_SETTINGS, type SaveKeyResult, type Settings } from '../shared/types';
 
 type Saved = { settings: Settings; usage: { day: string; ms: number } };
@@ -64,7 +65,8 @@ export class Store {
   /** Refuses rather than falling back to plain text, which Linux can do with no keyring. */
   saveApiKey(key: string): SaveKeyResult {
     const trimmed = key.trim();
-    if (!trimmed) return { ok: false, reason: 'The key is empty.' };
+    const problem = apiKeyProblem(trimmed);
+    if (problem) return { ok: false, reason: problem };
     if (!safeStorage.isEncryptionAvailable() || usesPlainTextBackend()) {
       return { ok: false, reason: 'No OS keychain is available, so the key was not saved. Set PRESAGE_API_KEY in .env instead.' };
     }

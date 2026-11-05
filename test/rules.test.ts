@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { apiKeyProblem } from '../src/main/api-key';
 import { isCameraRequestAllowed } from '../src/main/permissions';
 import { DEFAULT_SETTINGS } from '../src/shared/types';
 
@@ -25,6 +26,15 @@ describe('camera permission', () => {
     expect(ask({ permission: 'geolocation' })).toBe(false);
     expect(ask({ requestingUrl: 'https://example.com/' })).toBe(false);
     expect(ask({ requestingUrl: 'file:///tmp/other.html' })).toBe(false);
+  });
+});
+
+describe('API key check', () => {
+  it('rejects what is clearly not a key', () => {
+    expect(apiKeyProblem('')).toMatch(/empty/);
+    expect(apiKeyProblem('api key')).toMatch(/spaces/);
+    expect(apiKeyProblem('short')).toMatch(/too short/);
+    expect(apiKeyProblem('  abcdefghijklmnopqrstuvwxyz0123456789ABCD\n')).toBeNull();
   });
 });
 

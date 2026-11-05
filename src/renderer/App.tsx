@@ -166,6 +166,28 @@ function Home({ host, settings, onSettings }: { host: SignalHost; settings: Sett
   );
 }
 
+function ReplaceKey() {
+  const [key, setKey] = useState('');
+  const [result, setResult] = useState<string | null>(null);
+  return (
+    <div className="controls">
+      <input type="password" className="key-input" value={key} placeholder="Replace your API key" onChange={(e) => setKey(e.target.value)} aria-label="Replace Presage API key" />
+      <button
+        disabled={!key.trim()}
+        onClick={() => {
+          void bridge()
+            .saveApiKey(key)
+            .then((r) => setResult(r.ok ? 'Saved to the keychain. It applies next time the camera turns on.' : r.reason));
+          setKey('');
+        }}
+      >
+        Save to keychain
+      </button>
+      {result && <p className="note">{result}</p>}
+    </div>
+  );
+}
+
 const NUMBER_FIELDS: { key: 'sampleSeconds' | 'everyMinutes' | 'focusEnterMinutes' | 'dailyCapMinutes'; label: string; min: number }[] = [
   { key: 'sampleSeconds', label: 'Sample length (seconds)', min: 15 },
   { key: 'everyMinutes', label: 'Sample every (minutes)', min: 1 },
@@ -194,6 +216,7 @@ function SettingsPanel({ settings, onSettings, locked }: { settings: Settings; o
           />
         </label>
       ))}
+      <ReplaceKey />
       <label className="check">
         <input type="checkbox" checked={settings.telemetry} disabled={locked} onChange={(e) => update({ telemetry: e.target.checked })} />
         Share SDK telemetry with Presage (off by default)
