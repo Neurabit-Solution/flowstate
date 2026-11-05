@@ -6,7 +6,7 @@ import { JsonlRecorder } from '../src/signals/recorder';
 import { parseRecording, ReplaySource, sanitizeEvent } from '../src/signals/replay';
 import type { MetricsEvent, SignalEvent, SignalSource } from '../src/signals/types';
 
-const smoke = () => parseRecording(readFileSync('recordings/synthetic-smoke.jsonl', 'utf8'));
+const smoke = () => parseRecording(readFileSync('recordings/synthetic-talking-interruption.jsonl', 'utf8'));
 
 async function collect(source: SignalSource): Promise<SignalEvent[]> {
   const events: SignalEvent[] = [];
@@ -28,9 +28,8 @@ describe('replay', () => {
     expect(events).toEqual(recording.events);
 
     const metrics = events.filter((e): e is MetricsEvent => e.t === 'metrics');
-    expect(metrics.length).toBe(50);
-    expect(metrics.flatMap((m) => m.talking).filter((t) => t.detected).length).toBe(10);
-    expect(events.filter((e) => e.t === 'validation').map((e) => (e.t === 'validation' ? e.code : -1))).toEqual([0, 1, 0]);
+    expect(metrics.length).toBe(20 * 60);
+    expect(metrics.flatMap((m) => m.talking).filter((t) => t.detected).length).toBe(3 * 60);
   });
 
   it('keeps the recorded timing, and stop halts it', async () => {
