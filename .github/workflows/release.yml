@@ -1,0 +1,63 @@
+name: Release
+
+# Builds installers when a tag like v0.1.0 is pushed, and attaches them to a draft release.
+# Each runner builds for its own system. Nothing is published until someone reviews the draft.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            script: dist:linux
+            files: |
+              release/*.deb
+              release/*.AppImage
+          - os: windows-latest
+            script: dist:win
+            files: release/*.exe
+          - os: macos-latest
+            script: dist:mac
+            files: release/*.dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run ${{ matrix.script }} -- --publish never
+        env:
+          # Not code signed yet. Stops the build looking for a certificate.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+
+  draft-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Create a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" artifacts/*/* --draft --generate-notes
