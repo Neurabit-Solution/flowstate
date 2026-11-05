@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { build } from 'esbuild';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { windowsCommandLine } from '../src/cli/windows-command';
 import { PulseCore } from '../src/mcp/core';
 import { startPulseHttp } from '../src/mcp/http';
 import { GitWatcher, parseReflogLine } from '../src/timeline/git';
@@ -17,10 +18,19 @@ let dir: string;
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), 'timeline-'));
 });
-afterAll(() => rmSync(dir, { recursive: true, force: true }));
+const opened: TimelineStore[] = [];
+afterAll(() => {
+  // Windows cannot delete a database that is still open.
+  for (const store of opened) store.close();
+  rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+});
 
 let n = 0;
-const fresh = () => new TimelineStore(join(dir, `t${n++}.db`));
+const fresh = () => {
+  const store = new TimelineStore(join(dir, `t${n++}.db`));
+  opened.push(store);
+  return store;
+};
 
 describe('state spans', () => {
   it('merges updates, starts a row on change, and skips off and warming up', () => {
@@ -44,6 +54,7 @@ describe('state spans', () => {
     a.recordState('focused', 'live', at(9, 30));
     a.close();
     const b = new TimelineStore(path);
+    opened.push(b);
     b.recordState('available', 'live', at(11));
     expect(b.spans(DAY, at(23)).map((s) => [s.state, s.end])).toEqual([
       ['focused', at(9, 30)],
@@ -247,7 +258,8 @@ describe('flowstate run', () => {
 
   it('reports a command that does not exist', () => {
     const r = flowstate({ FLOWSTATE_PULSE_FILE: join(dir, 'missing.json') }, 'run', '--', 'no-such-command-here');
-    expect(r.status).toBe(127);
+    // The Windows shell reports this as 1.
+    expect(r.status).toBe(process.platform === 'win32' ? 1 : 127);
   });
 
   it('shows usage for anything else', () => {
@@ -272,6 +284,15 @@ describe('flowstate run', () => {
     } finally {
       await http.close();
     }
+  });
+});
+
+describe('Windows command line', () => {
+  it('quotes what the shell would otherwise split', () => {
+    expect(windowsCommandLine(['npm', 'test'])).toBe('npm test');
+    expect(windowsCommandLine(['C:\\Program Files\\node.exe', '-e', "console.log('hi'); process.exit(3)"])).toBe(`"C:\\Program Files\\node.exe" -e "console.log('hi'); process.exit(3)"`);
+    expect(windowsCommandLine(['say "hi"'])).toBe('"say \\"hi\\""');
+    expect(windowsCommandLine(['a b\\'])).toBe('"a b\\\\"');
   });
 });
 

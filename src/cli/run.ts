@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { readConnection } from '../mcp/remote';
+import { windowsCommandLine } from './windows-command';
 
 function connectionFile(): string {
   if (process.env.FLOWSTATE_PULSE_FILE) return process.env.FLOWSTATE_PULSE_FILE;
@@ -43,7 +44,10 @@ async function main(): Promise<void> {
   const kind = kindAt !== -1 && kindAt < split ? args[kindAt + 1] : /\b(test|vitest|jest|pytest|spec)\b/.test(words) ? 'test_run' : 'build';
 
   const started = Date.now();
-  const child = spawn(command[0]!, command.slice(1), { stdio: 'inherit', shell: process.platform === 'win32' });
+  const child =
+    process.platform === 'win32'
+      ? spawn(windowsCommandLine(command), { stdio: 'inherit', shell: true })
+      : spawn(command[0]!, command.slice(1), { stdio: 'inherit' });
   for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => child.kill(signal));
   const code = await new Promise<number>((resolve) => {
     child.on('error', (err) => {

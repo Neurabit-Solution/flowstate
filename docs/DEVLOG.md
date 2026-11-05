@@ -185,3 +185,5 @@ A 56 s live run with the camera moved and the chest in frame finished its full s
 
 **Not verified yet**
 - Installing the `.deb` (needs sudo). macOS and Windows installers, and the camera on either.
+
+CI on Windows caught a real bug: `flowstate run` lost quoting, because the shell joins arguments as they are. A command's exit code came back as 0 when it should have been 3. Arguments are now quoted on Windows. Linux and macOS passed as they were.
