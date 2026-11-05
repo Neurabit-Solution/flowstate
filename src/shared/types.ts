@@ -34,6 +34,8 @@ export type Settings = {
   everyMinutes: number;
   focusEnterMinutes: number;
   dailyCapMinutes: number;
+  /** Browser device id of the chosen camera. null lets the SDK pick its default. */
+  cameraId: string | null;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -43,6 +45,7 @@ export const DEFAULT_SETTINGS: Settings = {
   everyMinutes: 5,
   focusEnterMinutes: 10,
   dailyCapMinutes: 120,
+  cameraId: null,
 };
 
 export type SensingCommand =

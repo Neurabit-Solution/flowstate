@@ -23,6 +23,10 @@ export type LiveOptions = {
   /** The SDK defaults telemetry to on, so this is always passed explicitly. */
   enableTelemetry: () => boolean;
   onStream?: (stream: MediaStream | null) => void;
+  /** The camera the user chose, or null for the SDK's default. */
+  getCameraId?: () => string | null;
+  /** The chosen camera is gone, so this session uses the default instead. */
+  onCameraMissing?: () => void;
   /** Frames per second the camera is actually delivering, about once a second. */
   onFrameRate?: (fps: number) => void;
   /** Called when the session cap stops the camera by itself. */
@@ -35,6 +39,8 @@ export class LiveSource implements SignalSource {
 
   private sdk: SmartSpectraSDK | null = null;
   private stream: MediaStream | null = null;
+  /** Set when we opened the camera ourselves. The SDK leaves stopping those tracks to us. */
+  private ownedStream: MediaStream | null = null;
   private capTimer: ReturnType<typeof setTimeout> | null = null;
   private fpsTimer: ReturnType<typeof setInterval> | null = null;
   private listeners = new Set<SignalListener>();
@@ -84,6 +90,14 @@ export class LiveSource implements SignalSource {
     });
 
     try {
+      const chosen = await this.openChosenCamera();
+      if (chosen) {
+        this.ownedStream = chosen;
+        this.stream = chosen;
+        sdk.useMediaStream(chosen);
+        this.options.onStream?.(chosen);
+        this.watchFrameRate(chosen);
+      }
       await sdk.start();
     } catch (err) {
       this.teardown();
@@ -92,6 +106,30 @@ export class LiveSource implements SignalSource {
     this.capTimer = setTimeout(() => {
       void this.stop().then(() => this.options.onAutoStop?.());
     }, MAX_LIVE_SESSION_MS);
+  }
+
+  private async openChosenCamera(): Promise<MediaStream | null> {
+    const id = this.options.getCameraId?.();
+    if (!id) return null;
+    try {
+      // Same request as the SDK's default, for one specific camera.
+      return await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: id }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+      });
+    } catch (err) {
+      if (err instanceof DOMException && (err.name === 'NotFoundError' || err.name === 'OverconstrainedError')) {
+        this.options.onCameraMissing?.();
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  /** Moves a running session to the camera now chosen. */
+  async restart(): Promise<void> {
+    if (!this.sdk) return;
+    await this.stop();
+    await this.start();
   }
 
   async stop(): Promise<void> {
@@ -128,6 +166,8 @@ export class LiveSource implements SignalSource {
       // Already destroyed.
     }
     this.sdk = null;
+    this.ownedStream?.getTracks().forEach((t) => t.stop());
+    this.ownedStream = null;
     this.stream = null;
     this.options.onStream?.(null);
   }

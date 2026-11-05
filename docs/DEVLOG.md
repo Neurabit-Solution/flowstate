@@ -103,3 +103,7 @@ Chromium's fake camera runs at 20 fps by default, which explains the earlier fak
 Subham's webcam lists MJPG 1280x720 at 30 fps, so the likely cause is auto exposure slowing it down in low light. Not confirmed yet. The app now measures delivered frames per second, shows it in the live signal panel, and explains a slow camera.
 
 Use `fps=30` for all fake feed tests from now on.
+
+## 2026-11-06: Camera picker
+
+Subham asked to switch cameras when several are present. Home and onboarding show a picker only with 2 or more cameras. Listing them does not turn one on. Choosing a camera opens it ourselves with the same constraints as the SDK default and hands it over through `useMediaStream`, so we stop those tracks ourselves. Switching while on restarts the session. If the chosen camera is gone, the app says so and uses the default.

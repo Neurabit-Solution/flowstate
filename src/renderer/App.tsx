@@ -43,6 +43,41 @@ export function useHostMessages(host: SignalHost): HostMessage | null {
   return message;
 }
 
+/** Listing cameras does not turn one on. Shown only when there is a choice to make. */
+export function CameraPicker({ host, settings, onSettings }: { host: SignalHost; settings: Settings; onSettings: (s: Settings) => void }) {
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  useEffect(() => {
+    const refresh = () =>
+      void navigator.mediaDevices.enumerateDevices().then((all) => setCameras(all.filter((d) => d.kind === 'videoinput')));
+    refresh();
+    navigator.mediaDevices.addEventListener('devicechange', refresh);
+    return () => navigator.mediaDevices.removeEventListener('devicechange', refresh);
+  }, []);
+  if (cameras.length < 2) return null;
+  return (
+    <label className="field camera-field">
+      Camera
+      <select
+        aria-label="Camera"
+        value={settings.cameraId ?? ''}
+        onChange={(e) => {
+          void host
+            .chooseCamera(e.target.value || null)
+            .then(() => bridge().getSettings())
+            .then(onSettings);
+        }}
+      >
+        <option value="">Default</option>
+        {cameras.map((camera, i) => (
+          <option key={camera.deviceId} value={camera.deviceId}>
+            {camera.label || `Camera ${i + 1}`}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export function SamplePicker({ host, onStart }: { host: SignalHost; onStart?: () => void }) {
   const [names, setNames] = useState<string[]>([]);
   const [selected, setSelected] = useState('');
@@ -142,6 +177,7 @@ function Home({ host, settings, onSettings }: { host: SignalHost; settings: Sett
           )}
           {status.override === 'paused' && <button onClick={() => bridge().setOverride(null)}>End pause</button>}
         </div>
+        {!replay && <CameraPicker host={host} settings={settings} onSettings={onSettings} />}
         {!hasKey && <p className="note">No API key found, so the camera is unavailable. Sample recordings work without one.</p>}
         {!live && !replay && <SamplePicker host={host} />}
         <p className="note" data-testid="sdk-minutes">

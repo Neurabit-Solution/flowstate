@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Settings } from '../shared/types';
 import { CameraPreview, useCameraHint } from '../signals/debug-panel';
 import type { SignalHost } from '../signals/host';
-import { SamplePicker, useHostMessages } from './App';
+import { CameraPicker, SamplePicker, useHostMessages } from './App';
 
 type Step = 'welcome' | 'data' | 'key' | 'camera' | 'calibrate';
 const CALIBRATE_MS = 2 * 60_000;
@@ -65,6 +65,7 @@ export function Onboarding({ host, settings, onDone, onSettings }: Props) {
         <section className="panel">
           <h2>Turn on the camera</h2>
           <p>Next, FlowState watches for 2 minutes while you work quietly, to learn your own baseline.</p>
+          <CameraPicker host={host} settings={settings} onSettings={onSettings} />
           <div className="controls">
             <button
               onClick={() => {

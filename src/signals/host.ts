@@ -33,6 +33,7 @@ export class SignalHost {
   private readonly fpsListeners = new Set<(fps: number) => void>();
   private recording = false;
   private telemetry = false;
+  private cameraId: string | null = null;
   private readonly listeners = new Set<SignalListener>();
   private readonly messageListeners = new Set<(m: HostMessage | null) => void>();
   private readonly streamListeners = new Set<(s: MediaStream | null) => void>();
@@ -47,6 +48,12 @@ export class SignalHost {
       enableTelemetry: () => this.telemetry,
       onStream: (stream) => this.streamListeners.forEach((l) => l(stream)),
       onFrameRate: (fps) => this.onFrameRate(fps),
+      getCameraId: () => this.cameraId,
+      onCameraMissing: () => {
+        this.cameraId = null;
+        void bridge.updateSettings({ cameraId: null });
+        this.message('notice', 'The chosen camera was not found, so FlowState is using the default one.');
+      },
       onAutoStop: () => {
         this.message('notice', 'Camera stopped by the session limit.');
         void this.stopSensing();
@@ -119,6 +126,7 @@ export class SignalHost {
     this.clearMessage();
     const settings: Settings = await this.bridge.getSettings();
     this.telemetry = settings.telemetry;
+    this.cameraId = settings.cameraId;
     this.duty.setConfig(dutyConfig(settings));
     this.source = 'live';
     this.bridge.reportSensing('live', true);
@@ -135,6 +143,21 @@ export class SignalHost {
     await this.duty.stop();
     await this.endRecording();
     this.bridge.reportSensing(null, false);
+  }
+
+  /** Picks the camera. If it is on right now, moves to the new one at once. */
+  async chooseCamera(id: string | null): Promise<void> {
+    this.cameraId = id;
+    this.lowFpsSeconds = 0;
+    this.fps = null;
+    await this.bridge.updateSettings({ cameraId: id });
+    if (this.source !== 'live') return;
+    try {
+      await this.live.restart();
+    } catch (err) {
+      this.message('error', err instanceof Error ? err.message : String(err));
+      await this.stopSensing();
+    }
   }
 
   /** Feeds a recording through the same processor and state machine. Never touches the camera. */

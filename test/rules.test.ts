@@ -88,6 +88,11 @@ describe('repo rules from CLAUDE.md', () => {
     expect(readFileSync('src/main/index.ts', 'utf8').match(/type: 'start-sensing'/g)?.length).toBe(4);
   });
 
+  it('opens a camera only inside the live session', () => {
+    const offenders = walk('src').filter((f) => /getUserMedia\(/.test(readFileSync(f, 'utf8')));
+    expect(offenders).toEqual([join('src', 'signals', 'sdk-session.ts')]);
+  });
+
   it('keeps yes/no features free of raw values', () => {
     const types = readFileSync('src/shared/types.ts', 'utf8');
     expect(types).not.toMatch(/upperTrace|breathing|pulse|rate:/i);
