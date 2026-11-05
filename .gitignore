@@ -1,0 +1,14 @@
+node_modules/
+dist/
+out/
+release/
+*.log
+.DS_Store
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# live metric recordings stay local unless deliberately added with `git add -f`
+recordings/live-*.jsonl
