@@ -21,7 +21,7 @@ export const MAX_LIVE_SESSION_MS = 15 * 60 * 1000;
 export type LiveOptions = {
   getApiKey: () => Promise<string | null>;
   /** The SDK defaults telemetry to on, so this is always passed explicitly. */
-  enableTelemetry: boolean;
+  enableTelemetry: () => boolean;
   onStream?: (stream: MediaStream | null) => void;
   /** Called when the session cap stops the camera by itself. */
   onAutoStop?: () => void;
@@ -57,7 +57,7 @@ export class LiveSource implements SignalSource {
       apiKey,
       requestedMetrics: REQUESTED_METRICS,
       enableAccumulatedOutput: false,
-      enableTelemetry: this.options.enableTelemetry,
+      enableTelemetry: this.options.enableTelemetry(),
     });
     this.sdk = sdk;
 

@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isCameraRequestAllowed } from '../src/main/permissions';
+import { DEFAULT_SETTINGS } from '../src/shared/types';
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -56,13 +57,30 @@ describe('repo rules from CLAUDE.md', () => {
     }
   });
 
-  it('turns telemetry off explicitly, since the SDK defaults it on', () => {
-    expect(readFileSync('src/signals/debug-panel.tsx', 'utf8')).toMatch(/enableTelemetry: false/);
+  it('turns telemetry off by default and always passes it to the SDK, which defaults it on', () => {
+    expect(DEFAULT_SETTINGS.telemetry).toBe(false);
+    expect(readFileSync('src/signals/sdk-session.ts', 'utf8')).toMatch(/enableTelemetry: this\.options\.enableTelemetry\(\)/);
   });
 
-  it('starts the camera only from a click handler', () => {
-    const panel = readFileSync('src/signals/debug-panel.tsx', 'utf8');
-    expect(panel.match(/startLive\(/g)?.length).toBe(1);
-    expect(panel).toMatch(/onClick=\{\(\) => void startLive\(\)\}/);
+  it('starts the camera only from a click or the tray command', () => {
+    const callers = walk('src')
+      .filter((f) => /host\.startSensing\(|this\.startSensing\(/.test(readFileSync(f, 'utf8')))
+      .sort();
+    expect(callers).toEqual([join('src', 'renderer', 'App.tsx'), join('src', 'renderer', 'Onboarding.tsx'), join('src', 'signals', 'host.ts')].sort());
+    for (const file of ['src/renderer/App.tsx', 'src/renderer/Onboarding.tsx']) {
+      for (const line of readFileSync(file, 'utf8').split('\n').filter((l) => l.includes('host.startSensing('))) {
+        // Inside an onClick: same line, or the body of a multi-line handler.
+        expect(readFileSync(file, 'utf8')).toMatch(/onClick=\{\(\) => (void host\.startSensing|\{\s+setStep\('calibrate'\);\s+void host\.startSensing)/);
+        expect(line.includes('useEffect')).toBe(false);
+      }
+    }
+    expect(readFileSync('src/signals/host.ts', 'utf8')).toMatch(/command\.type === 'start-sensing'\) void this\.startSensing\(\)/);
+    expect(readFileSync('src/main/index.ts', 'utf8').match(/type: 'start-sensing'/g)?.length).toBe(4);
+  });
+
+  it('keeps yes/no features free of raw values', () => {
+    const types = readFileSync('src/shared/types.ts', 'utf8');
+    expect(types).not.toMatch(/upperTrace|breathing|pulse|rate:/i);
+    expect(readFileSync('src/state/machine.ts', 'utf8')).not.toMatch(/upperTrace|breathing|pulse/i);
   });
 });
