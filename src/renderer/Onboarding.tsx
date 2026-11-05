@@ -42,7 +42,7 @@ export function Onboarding({ host, settings, onDone, onSettings }: Props) {
             <dt>Never stored</dt>
             <dd>Video and images. Breathing values are stored only if you tick Save metrics in the live signal panel, in a local file you can delete.</dd>
             <dt>Network</dt>
-            <dd>The SDK connects to Presage to validate your API key and fetch the models it runs on this computer. FlowState adds no other network calls and no AI services, unless you connect Slack or Google Calendar. Then it calls only those services, and only to change your own status, Do Not Disturb and calendar.</dd>
+            <dd>The SDK connects to Presage to validate your API key and fetch the models it runs on this computer. FlowState adds no other network calls and no AI services, unless you connect Slack or Google Calendar. Then it calls only those services, and only to change your own status, Do Not Disturb and calendar. Your coding agents can ask a server on this computer for your state, never for raw signals.</dd>
             <dt>Deleting</dt>
             <dd>Settings has Delete all data. It removes everything listed above.</dd>
           </dl>

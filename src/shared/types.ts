@@ -22,6 +22,7 @@ export type AppStatus = DevStatus & {
   source: SensingSource;
   cameraOn: boolean;
   sdkMinutesToday: number;
+  heldMessages: number;
   overDailyCap: boolean;
   demo: boolean;
 };
@@ -62,6 +63,15 @@ export type IntegrationView = { id: string; label: string; enabled: boolean; rea
 export type IntegrationTest = { ok: boolean; detail: string };
 export type IntegrationLogEntry = { ts: number; integration: string; action: string; ok: boolean; error?: string };
 
+export type PulseInfo = {
+  running: boolean;
+  url: string | null;
+  claudeCommand: string;
+  cursorConfig: string;
+  copilotConfig: string;
+  held: { text: string; source: string; priority: string; ts: number }[];
+};
+
 /** The typed API the preload exposes as window.flowstate. */
 export type FlowstateBridge = {
   hasApiKey(): Promise<boolean>;
@@ -87,6 +97,7 @@ export type FlowstateBridge = {
   connectGoogle(clientId: string, clientSecret: string): Promise<SaveKeyResult>;
   disconnectIntegration(id: string): Promise<void>;
   integrationLog(): Promise<IntegrationLogEntry[]>;
+  pulseInfo(): Promise<PulseInfo>;
   onStatus(listener: (status: AppStatus) => void): () => void;
   onCommand(listener: (command: SensingCommand) => void): () => void;
 };

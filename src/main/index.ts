@@ -8,6 +8,7 @@ import type { SignalEvent } from '../signals/types';
 import { DEFAULT_MACHINE_CONFIG, DevStateMachine, type MachineConfig } from '../state/machine';
 import { IntegrationsHost } from './integrations-host';
 import { isCameraRequestAllowed } from './permissions';
+import { PulseHost } from './pulse-host';
 import { Store } from './store';
 import { AppTray } from './tray';
 
@@ -29,6 +30,7 @@ let win: BrowserWindow | null = null;
 let tray: AppTray | null = null;
 let store: Store;
 let integrations: IntegrationsHost;
+let pulse: PulseHost;
 let quitting = false;
 let sdkLoadError: string | null = null;
 let source: SensingSource = null;
@@ -51,6 +53,7 @@ function status(): AppStatus {
     source,
     cameraOn,
     sdkMinutesToday,
+    heldMessages: pulse?.core.heldList.length ?? 0,
     overDailyCap: sdkMinutesToday >= store.settings.dailyCapMinutes,
     demo: DEMO,
   };
@@ -63,6 +66,7 @@ function broadcast(): void {
   syncHold();
   // Samples log what they would do. They never touch a real status or calendar.
   void integrations?.manager.onState(current.state, current.source === 'replay');
+  pulse?.core.update(current.state);
 }
 
 function send(command: SensingCommand): void {
@@ -230,6 +234,7 @@ function registerIpc(): void {
   handle('flowstate:delete-local-data', async () => {
     send({ type: 'stop-sensing' });
     await integrations.deleteAll();
+    await pulse.deleteAll();
     recorder.stop();
     for (const name of readdirSync(liveDir, { withFileTypes: true })) {
       if (name.isFile() && /^live-.*\.jsonl$/.test(name.name)) rmSync(join(liveDir, name.name));
@@ -243,6 +248,7 @@ function registerIpc(): void {
   handle('flowstate:recorder-start', () => recorder.start(sdkVersion()));
   handle('flowstate:recorder-stop', () => recorder.stop());
   handle('flowstate:get-status', status);
+  handle('flowstate:pulse-info', () => pulse.info());
   handle('flowstate:integrations-list', () => integrations.info());
   handle('flowstate:integration-enabled', (id: string, enabled: boolean) => integrations.setEnabled(id, enabled));
   handle('flowstate:integration-test', (id: string) => integrations.test(id));
@@ -320,7 +326,8 @@ if (!app.requestSingleInstanceLock()) {
     event.preventDefault();
     restored = true;
     const timeout = new Promise((resolve) => setTimeout(resolve, QUIT_RESTORE_TIMEOUT_MS));
-    void Promise.race([integrations.manager.shutdown(), timeout]).finally(() => app.quit());
+    const work = Promise.all([integrations.manager.shutdown(), pulse?.stop().catch(() => undefined)]);
+    void Promise.race([work, timeout]).finally(() => app.quit());
   });
 
   void app.whenReady().then(() => {
@@ -329,6 +336,10 @@ if (!app.requestSingleInstanceLock()) {
     machine.setConfig(machineConfig(store.settings));
     integrations = new IntegrationsHost(app.getPath('userData'), store, () => win?.webContents.send('flowstate:integrations-changed'));
     void integrations.manager.recoverFromCrash();
+    pulse = new PulseHost(app.getPath('userData'), () => {
+      if (store) tray?.update(status());
+    });
+    pulse.start().catch((err) => console.error(`[flowstate] Pulse did not start: ${err instanceof Error ? err.message : String(err)}`));
     setInterval(() => void integrations.manager.tick(), INTEGRATION_TICK_MS);
     session.defaultSession.setPermissionRequestHandler((wc, permission, callback, details) => {
       const media = details as { mediaTypes?: string[]; requestingUrl?: string };

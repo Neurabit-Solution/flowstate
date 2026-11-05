@@ -3,6 +3,7 @@ import type { AppStatus, DevState, Settings } from '../shared/types';
 import { CameraPreview, DebugPanel } from '../signals/debug-panel';
 import { REPLAY_SPEED, type HostMessage, type SignalHost } from '../signals/host';
 import { SAMPLE_LABEL } from '../signals/replay';
+import { AgentsPanel } from './Agents';
 import { IntegrationsPanel } from './Integrations';
 import { Onboarding } from './Onboarding';
 
@@ -120,6 +121,7 @@ function Home({ host, settings, onSettings }: { host: SignalHost; settings: Sett
   const [showDebug, setShowDebug] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showIntegrations, setShowIntegrations] = useState(false);
+  const [showAgents, setShowAgents] = useState(false);
   useEffect(() => {
     void bridge().hasApiKey().then(setHasKey);
   }, [settings]);
@@ -197,10 +199,12 @@ function Home({ host, settings, onSettings }: { host: SignalHost; settings: Sett
       <div className="controls">
         <button onClick={() => setShowDebug(!showDebug)}>{showDebug ? 'Hide live signal' : 'Show live signal'}</button>
         <button onClick={() => setShowIntegrations(!showIntegrations)}>{showIntegrations ? 'Hide integrations' : 'Integrations'}</button>
+        <button onClick={() => setShowAgents(!showAgents)}>{showAgents ? 'Hide agents' : `Coding agents${status.heldMessages ? ` (${status.heldMessages} held)` : ''}`}</button>
         <button onClick={() => setShowSettings(!showSettings)}>{showSettings ? 'Hide settings' : 'Settings'}</button>
       </div>
       {showDebug && <DebugPanel host={host} disabled={live || replay} />}
       {showIntegrations && <IntegrationsPanel status={status} />}
+      {showAgents && <AgentsPanel status={status} />}
       {showSettings && <SettingsPanel settings={settings} onSettings={onSettings} locked={live} />}
     </main>
   );

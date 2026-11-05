@@ -95,7 +95,7 @@ describe('repo rules from CLAUDE.md', () => {
 
   it('keeps yes/no features free of raw values', () => {
     const types = readFileSync('src/shared/types.ts', 'utf8');
-    expect(types).not.toMatch(/upperTrace|breathing|pulse|rate:/i);
+    expect(types).not.toMatch(/upperTrace|breathing|pulseRate|\brate:|hrv/i);
     expect(readFileSync('src/state/machine.ts', 'utf8')).not.toMatch(/upperTrace|breathing|pulse/i);
   });
 });

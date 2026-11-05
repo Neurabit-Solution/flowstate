@@ -32,6 +32,7 @@ const bridge: FlowstateBridge = {
   connectGoogle: (clientId, clientSecret) => ipcRenderer.invoke('flowstate:google-connect', clientId, clientSecret),
   disconnectIntegration: (id) => ipcRenderer.invoke('flowstate:integration-disconnect', id),
   integrationLog: () => ipcRenderer.invoke('flowstate:integration-log'),
+  pulseInfo: () => ipcRenderer.invoke('flowstate:pulse-info'),
   onStatus: (listener) => subscribe<AppStatus>('flowstate:status', listener),
   onCommand: (listener) => subscribe<SensingCommand>('flowstate:command', listener),
 };

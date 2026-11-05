@@ -57,3 +57,5 @@ progress { width: 100%; height: 10px; margin: 8px 0 14px; }
 .integration-result { flex-basis: 100%; }
 .integration-log { margin: 0; padding-left: 18px; font-size: 13px; color: #c5cad6; line-height: 1.6; }
 .log-bad { color: #ffb4ab; }
+.snippet { border-top: 1px solid #2a2f3d; margin-top: 12px; }
+.snippet pre { background: #101218; border: 1px solid #2a2f3d; border-radius: 7px; padding: 10px; font-size: 12px; white-space: pre-wrap; word-break: break-all; margin: 6px 0 8px; }

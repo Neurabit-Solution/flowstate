@@ -132,3 +132,21 @@ A 56 s live run with the camera moved and the chest in frame finished its full s
 
 **Not verified yet**
 - All of it against real services. Tests use fakes, and nothing has run against a real Slack, Google account or real notification setting. macOS and Windows have not run at all.
+
+## 2026-11-06: M3 Pulse MCP
+
+**Changed**
+- `mcp/core.ts` holds the tool logic. It sees only DevState, so it cannot expose raw signals.
+- The app runs Streamable HTTP on 127.0.0.1 with a per-install bearer token, plus Host and Origin checks against requests from web pages.
+- `dist/mcp/stdio.js` is what agents launch. It forwards to the app through `pulse.json` (mode 600).
+
+**Decisions**
+- With the app closed, the bridge answers "off" and allows interruptions. A closed app must not block an agent.
+- `talking` is treated like `focused` for interruptions. The spec only covered focused and away.
+- `off` and `warming_up` allow interruptions, since nothing is being protected yet.
+- The setup command runs Electron as Node, so users do not need Node installed and the same command works when packaged.
+- The setup gives a command to copy and does not edit anyone's agent config.
+- Held messages and focus blocks live in memory until M4 adds the store, so a restart loses them.
+
+**Not verified yet**
+- A real Claude Code, Cursor or Copilot CLI session. Tests use the official MCP client over HTTP and stdio. The Copilot CLI config format is from memory and needs checking.

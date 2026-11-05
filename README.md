@@ -2,7 +2,7 @@
 
 Notices when you are in flow and protects it. Camera on only when you say so. Built on the Presage SmartSpectra SDK.
 
-Status: M1 core loop. See `docs/SPEC.md` for the plan and `docs/DEVLOG.md` for progress.
+Status: M3 Pulse MCP. See `docs/SPEC.md` for the plan and `docs/DEVLOG.md` for progress.
 
 ## Run
 
@@ -35,6 +35,10 @@ mkdir -p ~/.cache/flowstate-electron && mv node_modules/electron/dist ~/.cache/f
 ```
 
 Scripts: `npm run dev` (rebuild on change, Ctrl+R to reload the window), `npm run lint`, `npm test`.
+
+## Integrations and agents
+
+Setup for Slack, Google Calendar and OS focus is in `docs/INTEGRATIONS.md`. **Coding agents** in the app gives you the setup command for Claude Code, Cursor and Copilot CLI, and `AGENTS-SNIPPET.md` has the rules to paste.
 
 ## Platforms
 

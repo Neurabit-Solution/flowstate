@@ -75,6 +75,7 @@ export class AppTray {
       { label: stateText, enabled: false },
       { label: camera, enabled: false },
       { label: `SDK minutes today: ${status.sdkMinutesToday}${status.overDailyCap ? ' (over your daily limit)' : ''}`, enabled: false },
+      { label: `Held agent messages: ${status.heldMessages}`, enabled: false },
       { type: 'separator' },
       sensing
         ? { label: 'Stop camera', click: () => actions.stopCamera() }
