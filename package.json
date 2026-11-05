@@ -4,7 +4,9 @@
   "private": true,
   "description": "Notices when you are in flow and protects it. Camera on only when you say so.",
   "main": "dist/main/index.js",
-  "bin": { "flowstate": "dist/cli/run.js" },
+  "bin": {
+    "flowstate": "dist/cli/run.js"
+  },
   "engines": {
     "node": ">=20"
   },
@@ -14,7 +16,10 @@
     "start": "npm run build && node scripts/launch.mjs",
     "lint": "tsc --noEmit && eslint .",
     "test": "vitest run",
-    "make:synthetic": "node scripts/make-synthetic-recording.mjs"
+    "make:synthetic": "node scripts/make-synthetic-recording.mjs",
+    "dist:linux": "npm run build && electron-builder --linux --x64",
+    "dist:mac": "npm run build && electron-builder --mac --arm64",
+    "dist:win": "npm run build && electron-builder --win --x64"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
@@ -29,11 +34,77 @@
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.2.1",
     "electron": "43.2.0",
+    "electron-builder": "26.18.0",
     "esbuild": "0.28.2",
     "eslint": "10.14.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.1",
     "vite": "8.3.6",
     "vitest": "5.1.0"
+  },
+  "author": {
+    "name": "Subham",
+    "email": "subham@neurabitsolution.com"
+  },
+  "homepage": "https://github.com/Neurabit-Solution/flowstate",
+  "build": {
+    "appId": "com.neurabit.flowstate",
+    "productName": "FlowState",
+    "directories": {
+      "output": "release"
+    },
+    "asar": true,
+    "files": [
+      "dist/**",
+      "recordings/synthetic-*.jsonl",
+      "AGENTS-SNIPPET.md",
+      "package.json",
+      "node_modules/**",
+      "!node_modules/@smartspectra/node-sdk-*/**",
+      "!**/*.map"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg"
+      ],
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSCameraUsageDescription": "FlowState uses the camera, only after you turn it on, to notice when you are in focus. Video is processed on this computer and never saved."
+      },
+      "extraResources": [
+        {
+          "from": "node_modules/@smartspectra/node-sdk-darwin-${arch}/",
+          "to": "smartspectra"
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "extraResources": [
+        {
+          "from": "node_modules/@smartspectra/node-sdk-win32-${arch}/",
+          "to": "smartspectra"
+        }
+      ]
+    },
+    "linux": {
+      "category": "Development",
+      "target": [
+        "deb",
+        "AppImage"
+      ],
+      "maintainer": "Neurabit Solution <subham@neurabitsolution.com>",
+      "extraResources": [
+        {
+          "from": "node_modules/@smartspectra/node-sdk-linux-${arch}/",
+          "to": "smartspectra"
+        }
+      ]
+    }
   }
 }
