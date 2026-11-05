@@ -107,3 +107,11 @@ Use `fps=30` for all fake feed tests from now on.
 ## 2026-11-06: Camera picker
 
 Subham asked to switch cameras when several are present. Home and onboarding show a picker only with 2 or more cameras. Listing them does not turn one on. Choosing a camera opens it ourselves with the same constraints as the SDK default and hands it over through `useMediaStream`, so we stop those tracks ourselves. Switching while on restarts the session. If the chosen camera is gone, the app says so and uses the default.
+
+## 2026-11-06: First real session
+
+A 56 s live run with the camera moved and the chest in frame finished its full sample with no SDK error. Results: trace at 25 samples a second, talking readings throughout, breathing rate confidence reaching 69, and about 25 fps, right at the SDK's floor (`kFrameRateTooLow` in most checks).
+
+**Problem found:** the trace is marked `stable` only from about 32 s, which matches the docs' 30 s window. The processor scores stable samples only, so a 60 s sample leaves about 23 s, too few breaths to score. `steady` stayed null, so automatic focus could never start on the default cadence. The generated recordings hid this because every sample in them is stable.
+
+**Next:** get a longer real recording, then choose between a longer default sample and a looser scoring rule. Generated recordings should also start with a 30 s unstable stretch, so tests catch this.
