@@ -5,6 +5,7 @@ import { REPLAY_SPEED, type HostMessage, type SignalHost } from '../signals/host
 import { SAMPLE_LABEL } from '../signals/replay';
 import { AgentsPanel } from './Agents';
 import { IntegrationsPanel } from './Integrations';
+import { TimelinePanel } from './Timeline';
 import { Onboarding } from './Onboarding';
 
 const bridge = () => window.flowstate;
@@ -122,6 +123,7 @@ function Home({ host, settings, onSettings }: { host: SignalHost; settings: Sett
   const [showSettings, setShowSettings] = useState(false);
   const [showIntegrations, setShowIntegrations] = useState(false);
   const [showAgents, setShowAgents] = useState(false);
+  const [showTimeline, setShowTimeline] = useState(false);
   useEffect(() => {
     void bridge().hasApiKey().then(setHasKey);
   }, [settings]);
@@ -197,12 +199,14 @@ function Home({ host, settings, onSettings }: { host: SignalHost; settings: Sett
       </section>
 
       <div className="controls">
+        <button onClick={() => setShowTimeline(!showTimeline)}>{showTimeline ? 'Hide timeline' : 'Timeline'}</button>
         <button onClick={() => setShowDebug(!showDebug)}>{showDebug ? 'Hide live signal' : 'Show live signal'}</button>
         <button onClick={() => setShowIntegrations(!showIntegrations)}>{showIntegrations ? 'Hide integrations' : 'Integrations'}</button>
         <button onClick={() => setShowAgents(!showAgents)}>{showAgents ? 'Hide agents' : `Coding agents${status.heldMessages ? ` (${status.heldMessages} held)` : ''}`}</button>
         <button onClick={() => setShowSettings(!showSettings)}>{showSettings ? 'Hide settings' : 'Settings'}</button>
       </div>
       {showDebug && <DebugPanel host={host} disabled={live || replay} />}
+      {showTimeline && <TimelinePanel state={status.state} />}
       {showIntegrations && <IntegrationsPanel status={status} />}
       {showAgents && <AgentsPanel status={status} />}
       {showSettings && <SettingsPanel settings={settings} onSettings={onSettings} locked={live} />}
@@ -232,11 +236,12 @@ function ReplaceKey() {
   );
 }
 
-const NUMBER_FIELDS: { key: 'sampleSeconds' | 'everyMinutes' | 'focusEnterMinutes' | 'dailyCapMinutes'; label: string; min: number }[] = [
+const NUMBER_FIELDS: { key: 'sampleSeconds' | 'everyMinutes' | 'focusEnterMinutes' | 'dailyCapMinutes' | 'retentionDays'; label: string; min: number }[] = [
   { key: 'sampleSeconds', label: 'Sample length (seconds)', min: 15 },
   { key: 'everyMinutes', label: 'Sample every (minutes)', min: 1 },
   { key: 'focusEnterMinutes', label: 'Minutes before focus starts', min: 1 },
   { key: 'dailyCapMinutes', label: 'Warn after this many SDK minutes a day', min: 1 },
+  { key: 'retentionDays', label: 'Keep the timeline for (days)', min: 1 },
 ];
 
 function SettingsPanel({ settings, onSettings, locked }: { settings: Settings; onSettings: (s: Settings) => void; locked: boolean }) {
@@ -269,7 +274,7 @@ function SettingsPanel({ settings, onSettings, locked }: { settings: Settings; o
         <button
           className="danger"
           onClick={() => {
-            if (window.confirm('Delete your saved API key, connected accounts, settings, SDK minutes and any saved metric files?')) {
+            if (window.confirm('Delete your saved API key, connected accounts, timeline, settings, SDK minutes and any saved metric files?')) {
               void bridge()
                 .deleteLocalData()
                 .then(() => bridge().getSettings().then(onSettings));

@@ -4,7 +4,7 @@ import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app, Notification } from 'electron';
 import { PulseCore, type HeldMessage } from '../mcp/core';
-import { startPulseHttp, type PulseHttp } from '../mcp/http';
+import { startPulseHttp, type DevEventSink, type PulseHttp } from '../mcp/http';
 import type { PulseInfo } from '../shared/types';
 
 export class PulseHost {
@@ -16,11 +16,14 @@ export class PulseHost {
   constructor(
     dir: string,
     private readonly onChange: () => void,
+    private readonly onDevEvent: DevEventSink,
+    onQueued: (message: HeldMessage) => void,
   ) {
     this.file = join(dir, 'pulse.json');
     this.token = this.loadToken();
     this.core = new PulseCore({
       onDeliver: (messages) => this.deliver(messages),
+      onQueued,
       onChange: () => {
         this.http?.notifyChanged();
         onChange();
@@ -39,7 +42,7 @@ export class PulseHost {
   }
 
   async start(): Promise<void> {
-    this.http = await startPulseHttp(this.core, this.token, app.getVersion());
+    this.http = await startPulseHttp(this.core, this.token, app.getVersion(), this.onDevEvent);
     writeFileSync(this.file, JSON.stringify({ port: this.http.port, token: this.token }), { mode: 0o600 });
   }
 
@@ -67,6 +70,11 @@ export class PulseHost {
     rmSync(this.file, { force: true });
     this.token = randomBytes(32).toString('hex');
     await this.start();
+  }
+
+  cliCommand(): string {
+    const script = join(app.getAppPath(), 'dist', 'cli', 'run.js');
+    return `ELECTRON_RUN_AS_NODE=1 "${process.execPath}" "${script}" run -- npm test`;
   }
 
   info(): PulseInfo {

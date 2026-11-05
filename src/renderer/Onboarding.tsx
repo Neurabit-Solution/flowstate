@@ -38,7 +38,7 @@ export function Onboarding({ host, settings, onDone, onSettings }: Props) {
             <dt>Video</dt>
             <dd>Frames are processed on this computer by the SDK. FlowState never saves or uploads them.</dd>
             <dt>Stored here</dt>
-            <dd>Settings, your SDK minutes for the day, a log of integration actions, and your API key and any account tokens, encrypted by your OS keychain.</dd>
+            <dd>A private timeline of your states and, if you turn them on, commits, branch switches and test runs, kept for 30 days unless you change it. Settings, your SDK minutes for the day, and a log of integration actions. Your API key and any account tokens, encrypted by your OS keychain.</dd>
             <dt>Never stored</dt>
             <dd>Video and images. Breathing values are stored only if you tick Save metrics in the live signal panel, in a local file you can delete.</dd>
             <dt>Network</dt>

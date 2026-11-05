@@ -2,7 +2,7 @@
 
 Notices when you are in flow and protects it. Camera on only when you say so. Built on the Presage SmartSpectra SDK.
 
-Status: M3 Pulse MCP. See `docs/SPEC.md` for the plan and `docs/DEVLOG.md` for progress.
+Status: M4 timeline. See `docs/SPEC.md` for the plan and `docs/DEVLOG.md` for progress.
 
 ## Run
 
@@ -39,6 +39,10 @@ Scripts: `npm run dev` (rebuild on change, Ctrl+R to reload the window), `npm ru
 ## Integrations and agents
 
 Setup for Slack, Google Calendar and OS focus is in `docs/INTEGRATIONS.md`. **Coding agents** in the app gives you the setup command for Claude Code, Cursor and Copilot CLI, and `AGENTS-SNIPPET.md` has the rules to paste.
+
+## Timeline
+
+**Timeline** shows your states for the day with commits, test runs and agent messages on top, plus a week heatmap and patterns. It all stays in a local SQLite file for 30 days by default, and you can export or delete it. Add repos under **Timeline** to see commits. To record a test or build, wrap it with the command the Timeline panel shows.
 
 ## Platforms
 

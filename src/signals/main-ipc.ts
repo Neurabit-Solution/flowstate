@@ -12,7 +12,9 @@ export function listRecordings(dirs: string[]): string[] {
     if (!existsSync(dir)) continue;
     for (const name of readdirSync(dir)) if (RECORDING_NAME.test(name)) names.add(name);
   }
-  return [...names].sort();
+  // Shipped samples first, then anything saved on this machine.
+  const rank = (name: string) => (name.startsWith('live-') ? 1 : 0);
+  return [...names].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 }
 
 /** The renderer names a file, never a path. */

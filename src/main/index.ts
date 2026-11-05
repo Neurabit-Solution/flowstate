@@ -1,13 +1,16 @@
-import { readdirSync, rmSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { app, BrowserWindow, ipcMain, Notification, powerMonitor, session, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron';
-import type { AppStatus, Features, Override, SensingCommand, SensingSource, Settings } from '../shared/types';
+import { app, BrowserWindow, dialog, ipcMain, Notification, powerMonitor, session, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron';
+import type { AppStatus, Features, Override, SensingCommand, SensingSource, Settings, SpanSource } from '../shared/types';
 import { listRecordings, readRecording, RecorderHost } from '../signals/main-ipc';
 import type { SignalEvent } from '../signals/types';
 import { DEFAULT_MACHINE_CONFIG, DevStateMachine, type MachineConfig } from '../state/machine';
 import { IntegrationsHost } from './integrations-host';
 import { isCameraRequestAllowed } from './permissions';
+import { GitWatcher } from '../timeline/git';
+import { startOfLocalDay, TimelineStore } from '../timeline/store';
 import { PulseHost } from './pulse-host';
 import { Store } from './store';
 import { AppTray } from './tray';
@@ -16,6 +19,9 @@ const PAGE_PATH = join(__dirname, '../renderer/index.html');
 const PAGE_URL = pathToFileURL(PAGE_PATH).href;
 const PRELOAD_PATH = join(__dirname, '../preload/index.js');
 const HEARTBEAT_MS = 5000;
+const GIT_POLL_MS = 15_000;
+const PRUNE_MS = 6 * 60 * 60_000;
+const DAY_MS = 24 * 60 * 60_000;
 const INTEGRATION_TICK_MS = 5 * 60_000;
 const QUIT_RESTORE_TIMEOUT_MS = 5000;
 const DEMO = process.argv.includes('--demo');
@@ -31,6 +37,8 @@ let tray: AppTray | null = null;
 let store: Store;
 let integrations: IntegrationsHost;
 let pulse: PulseHost;
+let timeline: TimelineStore;
+let git: GitWatcher;
 let quitting = false;
 let sdkLoadError: string | null = null;
 let source: SensingSource = null;
@@ -67,6 +75,12 @@ function broadcast(): void {
   // Samples log what they would do. They never touch a real status or calendar.
   void integrations?.manager.onState(current.state, current.source === 'replay');
   pulse?.core.update(current.state);
+  timeline?.recordState(current.state, spanSource(current), Date.now());
+}
+
+function spanSource(current: AppStatus): SpanSource {
+  if (current.source === 'replay') return 'replay';
+  return current.override ? 'manual' : 'live';
 }
 
 function send(command: SensingCommand): void {
@@ -235,6 +249,7 @@ function registerIpc(): void {
     send({ type: 'stop-sensing' });
     await integrations.deleteAll();
     await pulse.deleteAll();
+    timeline.deleteAll();
     recorder.stop();
     for (const name of readdirSync(liveDir, { withFileTypes: true })) {
       if (name.isFile() && /^live-.*\.jsonl$/.test(name.name)) rmSync(join(liveDir, name.name));
@@ -249,6 +264,34 @@ function registerIpc(): void {
   handle('flowstate:recorder-stop', () => recorder.stop());
   handle('flowstate:get-status', status);
   handle('flowstate:pulse-info', () => pulse.info());
+  handle('flowstate:timeline-day', (dayStart: number) => {
+    const start = startOfLocalDay(dayStart);
+    // Handles days that are not 24 hours long when clocks change.
+    const end = startOfLocalDay(start + DAY_MS + 2 * 60 * 60_000);
+    return { dayStart: start, dayEnd: end, spans: timeline.spans(start, end), events: timeline.events(start, end) };
+  });
+  handle('flowstate:timeline-week', (weekEnd: number) => {
+    const from = weekEnd - 7 * DAY_MS;
+    return { heatmap: timeline.weekHeatmap(from, weekEnd), insights: timeline.insights(from, weekEnd) };
+  });
+  handle('flowstate:timeline-delete-day', (dayStart: number) => timeline.deleteDay(startOfLocalDay(dayStart)));
+  handle('flowstate:timeline-export', async () => {
+    const options = { title: 'Export timeline', defaultPath: 'flowstate-timeline.csv', filters: [{ name: 'CSV', extensions: ['csv'] }] };
+    const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+    if (result.canceled || !result.filePath) return null;
+    writeFileSync(result.filePath, timeline.exportCsv(), { mode: 0o600 });
+    return result.filePath;
+  });
+  handle('flowstate:repos', () => timeline.repos().map((r) => r.path));
+  handle('flowstate:repo-add', async () => {
+    const options = { title: 'Choose a git repository', properties: ['openDirectory' as const] };
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+    const path = result.filePaths[0];
+    if (result.canceled || !path) return null;
+    return git.add(path);
+  });
+  handle('flowstate:repo-remove', (path: string) => timeline.removeRepo(path));
+  handle('flowstate:cli-command', () => pulse.cliCommand());
   handle('flowstate:integrations-list', () => integrations.info());
   handle('flowstate:integration-enabled', (id: string, enabled: boolean) => integrations.setEnabled(id, enabled));
   handle('flowstate:integration-test', (id: string) => integrations.test(id));
@@ -269,6 +312,14 @@ function registerIpc(): void {
   listen('flowstate:sensing', (next: SensingSource, camera: boolean) => onSensing(next, camera));
   listen('flowstate:set-override', (override: Override | null, forMinutes?: number) => setOverride(override, forMinutes));
   app.on('before-quit', () => recorder.stop());
+}
+
+function countCommitFiles(repo: string, hash: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    execFile('git', ['-C', repo, 'diff-tree', '--no-commit-id', '--name-only', '-r', hash], { timeout: 5000 }, (err, stdout) => {
+      resolve(err ? null : stdout.split('\n').filter(Boolean).length);
+    });
+  });
 }
 
 function showWindow(): void {
@@ -327,7 +378,11 @@ if (!app.requestSingleInstanceLock()) {
     restored = true;
     const timeout = new Promise((resolve) => setTimeout(resolve, QUIT_RESTORE_TIMEOUT_MS));
     const work = Promise.all([integrations.manager.shutdown(), pulse?.stop().catch(() => undefined)]);
-    void Promise.race([work, timeout]).finally(() => app.quit());
+    void Promise.race([work, timeout]).finally(() => {
+      // Closes the open span at the time of quitting.
+      timeline?.recordState('off', 'live', Date.now());
+      app.quit();
+    });
   });
 
   void app.whenReady().then(() => {
@@ -336,9 +391,21 @@ if (!app.requestSingleInstanceLock()) {
     machine.setConfig(machineConfig(store.settings));
     integrations = new IntegrationsHost(app.getPath('userData'), store, () => win?.webContents.send('flowstate:integrations-changed'));
     void integrations.manager.recoverFromCrash();
-    pulse = new PulseHost(app.getPath('userData'), () => {
-      if (store) tray?.update(status());
-    });
+    timeline = new TimelineStore(join(app.getPath('userData'), 'timeline.db'));
+    timeline.prune(store.settings.retentionDays, Date.now());
+    setInterval(() => timeline.prune(store.settings.retentionDays, Date.now()), PRUNE_MS);
+    git = new GitWatcher(timeline, countCommitFiles);
+    setInterval(() => void git.poll().catch(() => undefined), GIT_POLL_MS);
+    pulse = new PulseHost(
+      app.getPath('userData'),
+      () => {
+        if (store) tray?.update(status());
+      },
+      (event) => timeline.addEvent(event.ts, event.kind as 'test_run' | 'build', event.repo, event.detail),
+      // Who sent it and how urgent. The text itself is not kept in the timeline.
+      (message) => timeline.addEvent(message.ts, 'agent_message', null, { source: message.source, priority: message.priority, length: message.text.length }),
+    );
+    pulse.core.seedBlocks(timeline.focusBlocks(Date.now() - 8 * DAY_MS, Date.now()));
     pulse.start().catch((err) => console.error(`[flowstate] Pulse did not start: ${err instanceof Error ? err.message : String(err)}`));
     setInterval(() => void integrations.manager.tick(), INTEGRATION_TICK_MS);
     session.defaultSession.setPermissionRequestHandler((wc, permission, callback, details) => {

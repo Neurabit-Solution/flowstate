@@ -39,6 +39,7 @@ export type Settings = {
   cameraId: string | null;
   /** Everything is off until the user turns it on. */
   enabledIntegrations: Record<string, boolean>;
+  retentionDays: number;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -50,6 +51,7 @@ export const DEFAULT_SETTINGS: Settings = {
   dailyCapMinutes: 120,
   cameraId: null,
   enabledIntegrations: {},
+  retentionDays: 30,
 };
 
 export type SensingCommand =
@@ -71,6 +73,21 @@ export type PulseInfo = {
   copilotConfig: string;
   held: { text: string; source: string; priority: string; ts: number }[];
 };
+
+export type SpanSource = 'live' | 'manual' | 'replay';
+export type StateSpan = { state: DevState; start: number; end: number; source: SpanSource };
+export type DevEventKind = 'commit' | 'branch_switch' | 'test_run' | 'build' | 'ci_run' | 'agent_message';
+export type DevEvent = { ts: number; kind: DevEventKind; repo: string | null; detail: Record<string, unknown> };
+/** Focus minutes by weekday (0 is Sunday), then by local hour. */
+export type WeekHeatmap = number[][];
+export type TimelineInsights = {
+  focusMinutes: number;
+  blocks: number;
+  medianBlockMinutes: number;
+  longestBlocks: { start: number; end: number }[];
+  blocksEndedNearLongBuild: number;
+};
+export type DayTimeline = { dayStart: number; dayEnd: number; spans: StateSpan[]; events: DevEvent[] };
 
 /** The typed API the preload exposes as window.flowstate. */
 export type FlowstateBridge = {
@@ -98,6 +115,14 @@ export type FlowstateBridge = {
   disconnectIntegration(id: string): Promise<void>;
   integrationLog(): Promise<IntegrationLogEntry[]>;
   pulseInfo(): Promise<PulseInfo>;
+  timelineDay(dayStart: number): Promise<DayTimeline>;
+  timelineWeek(weekEnd: number): Promise<{ heatmap: WeekHeatmap; insights: TimelineInsights }>;
+  timelineDeleteDay(dayStart: number): Promise<void>;
+  timelineExport(): Promise<string | null>;
+  listRepos(): Promise<string[]>;
+  addRepo(): Promise<string | null>;
+  removeRepo(path: string): Promise<void>;
+  cliCommand(): Promise<string>;
   onStatus(listener: (status: AppStatus) => void): () => void;
   onCommand(listener: (command: SensingCommand) => void): () => void;
 };

@@ -150,3 +150,21 @@ A 56 s live run with the camera moved and the chest in frame finished its full s
 
 **Not verified yet**
 - A real Claude Code, Cursor or Copilot CLI session. Tests use the official MCP client over HTTP and stdio. The Copilot CLI config format is from memory and needs checking.
+
+## 2026-11-06: M4 timeline
+
+**Changed**
+- `timeline/store.ts`: SQLite through `node:sqlite` (built into Electron 43's Node 24, so no native module to rebuild for each OS).
+- Git watcher reads `.git/logs/HEAD` from the end of the file, so existing history stays out.
+- `flowstate run -- <command>` records start, duration and exit code. Output and exit code pass through untouched.
+- Day view, week heatmap, rule-based patterns, CSV export, delete by day, retention setting.
+
+**Decisions**
+- Off and warming up are gaps, not stored spans.
+- Samples appear in the day view, marked as samples, but never count toward patterns, the heatmap or focus totals.
+- Agent messages store who sent them, priority and length, not the text. `flowstate run` stores only the first two words of a command, since later ones could hold a secret.
+- CSV cells starting with `=`, `+`, `-` or `@` get a leading quote, so a commit message cannot run as a spreadsheet formula.
+- CI ingest is not built. The spec lists it as cuttable and it needs a decision on polling GitHub.
+- The integration log stays in JSON rather than the spec's SQLite table. It works and moving it adds nothing yet.
+
+**Verified by driving the app in a separate profile:** a real `flowstate run` passed through its output and exit code and appeared on the day view. Manual focus and a sample recorded their spans, and samples stayed out of the patterns. Delete all was covered by unit tests only for the timeline. Its full path through the app has not been run, because the automated run was not permitted to perform a delete.

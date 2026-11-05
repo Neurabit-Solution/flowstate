@@ -33,6 +33,7 @@ type Block = { start: number; end: number };
 
 export type CoreOptions = {
   onDeliver?: (messages: HeldMessage[]) => void;
+  onQueued?: (message: HeldMessage) => void;
   onChange?: () => void;
   now?: () => number;
   /** Start of the local day containing `ms`. */
@@ -59,6 +60,11 @@ export class PulseCore implements PulseBackend {
 
   get heldList(): HeldMessage[] {
     return this.held;
+  }
+
+  /** Focus from earlier runs, so totals survive a restart. */
+  seedBlocks(blocks: Block[]): void {
+    this.blocks = [...blocks, ...this.blocks];
   }
 
   update(state: DevState): void {
@@ -141,7 +147,9 @@ export class PulseCore implements PulseBackend {
     const clean = text.trim().slice(0, MAX_TEXT);
     if (!clean) return { queued: false, heldMessages: this.held.length, advice: 'The message is empty.' };
     if (this.held.length >= MAX_HELD) return { queued: false, heldMessages: this.held.length, advice: 'The queue is full. Keep working and summarize later.' };
-    this.held = [...this.held, { text: clean, priority, source: source.trim().slice(0, MAX_FIELD) || 'agent', ts: this.now() }];
+    const message: HeldMessage = { text: clean, priority, source: source.trim().slice(0, MAX_FIELD) || 'agent', ts: this.now() };
+    this.held = [...this.held, message];
+    this.options.onQueued?.(message);
     this.options.onChange?.();
     // Nothing to wait for if the user is already free.
     if (isOpen(this.state)) {

@@ -58,7 +58,10 @@ const send = (res: ServerResponse, status: number, body: unknown) => {
 
 type Session = { transport: StreamableHTTPServerTransport; pulse: PulseServer };
 
-export async function startPulseHttp(backend: PulseBackend, token: string, version: string): Promise<PulseHttp> {
+/** Dev events from the flowstate command. Separate from the agent tools, which only read state. */
+export type DevEventSink = (event: { ts: number; kind: string; repo: string | null; detail: Record<string, unknown> }) => void;
+
+export async function startPulseHttp(backend: PulseBackend, token: string, version: string, onDevEvent?: DevEventSink): Promise<PulseHttp> {
   const sessions = new Map<string, Session>();
   let port = 0;
 
@@ -74,6 +77,18 @@ export async function startPulseHttp(backend: PulseBackend, token: string, versi
         return backend.waitUntilAvailable(Number(args.timeoutSeconds ?? 0));
       case 'getFocusSummary':
         return backend.getFocusSummary(args.range as SummaryRange);
+      case 'addDevEvent': {
+        const kind = String(args.kind);
+        if (kind !== 'test_run' && kind !== 'build') throw new Error('Unknown kind');
+        const detail = (args.detail ?? {}) as Record<string, unknown>;
+        onDevEvent?.({
+          ts: Number(args.ts) || Date.now(),
+          kind,
+          repo: typeof args.repo === 'string' ? args.repo.slice(0, 200) : null,
+          detail: { command: String(detail.command ?? '').slice(0, 100), exitCode: Number(detail.exitCode), durationMs: Number(detail.durationMs) },
+        });
+        return { ok: true };
+      }
       default:
         throw new Error('Unknown method');
     }
