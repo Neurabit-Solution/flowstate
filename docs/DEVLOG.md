@@ -168,3 +168,20 @@ A 56 s live run with the camera moved and the chest in frame finished its full s
 - The integration log stays in JSON rather than the spec's SQLite table. It works and moving it adds nothing yet.
 
 **Verified by driving the app in a separate profile:** a real `flowstate run` passed through its output and exit code and appeared on the day view. Manual focus and a sample recorded their spans, and samples stayed out of the patterns. Delete all was covered by unit tests only for the timeline. Its full path through the app has not been run, because the automated run was not permitted to perform a delete.
+
+## 2026-11-06: M5 packaging
+
+**Changed**
+- electron-builder with per-OS `extraResources` for the SDK's native files. `.deb` and AppImage on Linux, `.dmg` on macOS, NSIS on Windows.
+- GitHub Actions: tests on all three systems on every push, and installers plus a draft release on a `v*` tag.
+- README with judge steps, and `docs/DATA-HANDLING.md` as the source for the DEV post.
+
+**Verified**
+- Ran the unpacked Linux package on a 30 fps fake feed: the SDK loaded from `resources/smartspectra`, with about 29 fps, no auth errors and no page errors. Sample recordings are listed, and the Pulse bridge starts from inside `app.asar`. The key and `.env` are not in the package.
+
+**Decisions**
+- The `.deb` is the Linux install to recommend. electron-builder's script installs an AppArmor profile on Ubuntu 24+. The AppImage hits the same sandbox stop as a source checkout, and I confirmed that with the unpacked build from a normal session.
+- Releases are drafts, so nothing goes public without a person reviewing it.
+
+**Not verified yet**
+- Installing the `.deb` (needs sudo). macOS and Windows installers, and the camera on either.

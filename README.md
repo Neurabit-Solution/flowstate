@@ -1,49 +1,86 @@
 # FlowState
 
-Notices when you are in flow and protects it. Camera on only when you say so. Built on the Presage SmartSpectra SDK.
+Notices when you are in flow and protects it. It reads a live signal from your webcam using the [Presage SmartSpectra SDK](https://smartspectra.presagetech.com/docs/nodejs), turns it into one word (Focus, Available, In a conversation, Away), and then:
 
-Status: M4 timeline. See `docs/SPEC.md` for the plan and `docs/DEVLOG.md` for progress.
+1. **Protects focus.** Sets Do Not Disturb, your Slack status and a calendar block, and puts them back afterwards.
+2. **Tells your coding agents to wait.** A local MCP server lets Claude Code, Cursor and Copilot CLI hold non-urgent questions.
+3. **Shows you your own patterns.** A private timeline of focus blocks with your commits and test runs on top.
 
-## Run
+The camera is off until you click. Video is processed on your computer and never saved. Not a medical device. Details: [docs/DATA-HANDLING.md](docs/DATA-HANDLING.md).
 
-Needs Node 20 or newer (24 LTS recommended). `npm install` downloads native runtimes for every platform, a few hundred MB.
+The live SDK code is in [`src/signals/sdk-session.ts`](src/signals/sdk-session.ts).
+
+## Try it without a key or camera
+
+Needs Node 20 or newer (24 recommended). `npm install` downloads native runtimes for every platform, a few hundred MB.
 
 ```bash
-npm install
-cp .env.example .env   # then set PRESAGE_API_KEY
-npm start
+git clone https://github.com/Neurabit-Solution/flowstate.git
+```
+```bash
+cd flowstate && npm install && npm start
 ```
 
-You can also paste the key during onboarding, which stores it in your OS keychain.
+In onboarding, go to the API key step and click **Use sample recording**. It feeds recorded metrics (never video) through the same pipeline and is labelled "Sample recording (not live)" on screen. It plays at 20x speed. Open **Timeline** and **Integrations** to see what it did. Samples log what integrations would do, and change nothing.
 
-No key? Click **Use sample recording** during onboarding. It works without a key or a camera. The current samples are generated test data.
+The current samples are generated test data, and the app says so.
 
-`npm start -- --demo` shortens the focus threshold to 30 s.
+## Use the camera
 
-On Ubuntu 23.10 and newer, the first `npm start` stops with a Chromium sandbox error. FlowState keeps the sandbox on and prints the one command that fixes it:
+Get an API key at https://physiology.presagetech.com/auth/register, then paste it during onboarding. It is stored in your OS keychain. For development you can instead copy `.env.example` to `.env`.
+
+For good readings:
+
+- Keep your head and upper chest in frame.
+- Use good light. The SDK needs about 25 frames a second and stops below that, and webcams slow down in the dark. **Show live signal** shows the camera's speed.
+- If you have several cameras, pick one on the home screen.
+
+`npm start -- --demo` shortens the time to focus to 30 s.
+
+## Platforms
+
+| | |
+|---|---|
+| Windows | x64 |
+| macOS | Apple Silicon only. The SDK does not support Intel Macs. |
+| Linux | x64 and arm64 from source, with glibc 2.35+ (Ubuntu 22.04+, Debian 12+). Installers are x64. |
+
+Installers are on the [releases page](https://github.com/Neurabit-Solution/flowstate/releases) once published. They are not code signed yet, so macOS and Windows will warn you.
+
+### Ubuntu 23.10 and newer
+
+Ubuntu restricts the sandbox Electron relies on. FlowState keeps the sandbox on rather than running without it.
+
+- **Installed:** use the `.deb`, which sets this up when it installs. The AppImage cannot do this, and stops at launch with a sandbox error.
+- **From source:** the first `npm start` stops and prints the command to run:
 
 ```bash
 sudo chown root:root node_modules/electron/dist/chrome-sandbox && sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
 ```
 
-Repeat it after any `npm install` that reinstalls Electron.
-
-With that helper in use, Electron also cannot run from a path containing a space. Move the project, or keep it where it is and move only Electron:
+Repeat it after any `npm install` that reinstalls Electron. Electron also cannot run from a path with a space in this setup. Move the project, or move only Electron:
 
 ```bash
 mkdir -p ~/.cache/flowstate-electron && mv node_modules/electron/dist ~/.cache/flowstate-electron/dist && ln -s ~/.cache/flowstate-electron/dist node_modules/electron/dist
 ```
 
-Scripts: `npm run dev` (rebuild on change, Ctrl+R to reload the window), `npm run lint`, `npm test`.
-
 ## Integrations and agents
 
-Setup for Slack, Google Calendar and OS focus is in `docs/INTEGRATIONS.md`. **Coding agents** in the app gives you the setup command for Claude Code, Cursor and Copilot CLI, and `AGENTS-SNIPPET.md` has the rules to paste.
+All are off until you turn them on. Setup for Slack, Google Calendar and OS focus is in [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md). **Coding agents** in the app gives you the setup command for your agent, and [AGENTS-SNIPPET.md](AGENTS-SNIPPET.md) has the rules to paste.
 
 ## Timeline
 
-**Timeline** shows your states for the day with commits, test runs and agent messages on top, plus a week heatmap and patterns. It all stays in a local SQLite file for 30 days by default, and you can export or delete it. Add repos under **Timeline** to see commits. To record a test or build, wrap it with the command the Timeline panel shows.
+Add repos under **Timeline** to see commits and branch switches. To record a test or build, wrap it with the command that panel shows. It stays in a local SQLite file for 30 days by default, and you can export or delete it.
 
-## Platforms
+## Development
 
-macOS Apple Silicon, Linux x64 and arm64 (glibc 2.35+, so Ubuntu 22.04+ or Debian 12+), Windows x64. Intel Macs are not supported by the SDK. Not a medical device.
+```bash
+npm run dev
+```
+```bash
+npm run lint && npm test
+```
+
+`npm run dist:linux`, `dist:mac` and `dist:win` build installers for the system you are on. Pushing a tag like `v0.1.0` builds all three in GitHub Actions and attaches them to a draft release.
+
+Signals flow one way: `signals -> state -> (integrations | mcp | timeline)`. Raw values stay in `src/signals/`, and tests enforce this.
