@@ -16,6 +16,12 @@ const shared = {
 const configs = [
   {
     ...shared,
+    // The flowstate run command. Reports when commands ran, never their output.
+    entryPoints: ['src/cli/run.ts'],
+    outfile: 'dist/cli/run.js',
+  },
+  {
+    ...shared,
     // Started by coding agents, not by the app. Reads DevState only.
     entryPoints: ['src/mcp/stdio.ts'],
     outfile: 'dist/mcp/stdio.js',

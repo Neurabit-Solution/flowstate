@@ -5,7 +5,7 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   {
     // Data flows one way: signals -> state -> (integrations | mcp | timeline).
-    files: ['src/state/**', 'src/integrations/**', 'src/mcp/**', 'src/timeline/**', 'src/shared/**'],
+    files: ['src/state/**', 'src/integrations/**', 'src/mcp/**', 'src/timeline/**', 'src/cli/**', 'src/shared/**'],
     rules: {
       'no-restricted-imports': ['error', { patterns: ['**/signals/**', '@smartspectra/*'] }],
     },

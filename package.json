@@ -4,6 +4,7 @@
   "private": true,
   "description": "Notices when you are in flow and protects it. Camera on only when you say so.",
   "main": "dist/main/index.js",
+  "bin": { "flowstate": "dist/cli/run.js" },
   "engines": {
     "node": ">=20"
   },
