@@ -28,6 +28,7 @@ export class SignalHost {
   private replayUnsub: (() => void) | null = null;
   private source: SensingSource = null;
   private recordMetrics = false;
+  private lastProcessing: SignalEvent | null = null;
   private fps: number | null = null;
   private lowFpsSeconds = 0;
   private readonly fpsListeners = new Set<(fps: number) => void>();
@@ -86,6 +87,8 @@ export class SignalHost {
   }
 
   subscribe(listener: SignalListener): () => void {
+    // A panel opened mid-session still needs to know where things stand.
+    if (this.lastProcessing) listener(this.lastProcessing);
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
@@ -200,6 +203,7 @@ export class SignalHost {
 
   private onEvent(event: SignalEvent): void {
     if (this.recording) this.bridge.recorderAppend(event);
+    if (event.t === 'processing') this.lastProcessing = event;
     this.listeners.forEach((l) => l(event));
     const features = this.processor.ingest(event);
     if (features) this.bridge.sendFeatures(features);
