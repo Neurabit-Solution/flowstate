@@ -25,7 +25,7 @@ export class SignalHost {
   private recording = false;
   private telemetry = false;
   private readonly listeners = new Set<SignalListener>();
-  private readonly messageListeners = new Set<(m: HostMessage) => void>();
+  private readonly messageListeners = new Set<(m: HostMessage | null) => void>();
   private readonly streamListeners = new Set<(s: MediaStream | null) => void>();
 
   constructor(
@@ -73,7 +73,7 @@ export class SignalHost {
     return () => this.listeners.delete(listener);
   }
 
-  onMessage(listener: (m: HostMessage) => void): () => void {
+  onMessage(listener: (m: HostMessage | null) => void): () => void {
     this.messageListeners.add(listener);
     return () => this.messageListeners.delete(listener);
   }
@@ -93,6 +93,7 @@ export class SignalHost {
    */
   async startSensing(firstSampleMs?: number): Promise<void> {
     if (this.source) return;
+    this.clearMessage();
     const settings: Settings = await this.bridge.getSettings();
     this.telemetry = settings.telemetry;
     this.duty.setConfig(dutyConfig(settings));
@@ -116,6 +117,7 @@ export class SignalHost {
   /** Feeds a recording through the same processor and state machine. Never touches the camera. */
   async startReplay(name: string): Promise<void> {
     if (this.source) return;
+    this.clearMessage();
     const recording = parseRecording(await this.bridge.readRecording(name));
     this.source = 'replay';
     this.processor = this.newProcessor();
@@ -138,6 +140,7 @@ export class SignalHost {
     this.replayUnsub = null;
     this.replay = null;
     this.source = null;
+    this.clearMessage();
     // A sample's baseline must not carry over into live sensing.
     this.processor = this.newProcessor();
     this.bridge.reportSensing(null, false);
@@ -162,6 +165,10 @@ export class SignalHost {
         void this.stopSensing();
       }
     }
+  }
+
+  private clearMessage(): void {
+    this.messageListeners.forEach((l) => l(null));
   }
 
   private message(kind: HostMessage['kind'], text: string): void {
