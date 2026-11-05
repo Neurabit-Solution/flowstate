@@ -64,6 +64,7 @@ export function DebugPanel({ host, disabled }: { host: SignalHost; disabled: boo
   const [talking, setTalking] = useState<boolean | null>(null);
   const [traceCount, setTraceCount] = useState(0);
   const [record, setRecord] = useState(false);
+  const [fps, setFps] = useState<number | null>(null);
   const traceRef = useRef<TraceSample[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -96,6 +97,8 @@ export function DebugPanel({ host, disabled }: { host: SignalHost; disabled: boo
     [host],
   );
 
+  useEffect(() => host.onFps(setFps), [host]);
+
   const talkingText = talking === null ? 'No reading yet' : talking ? 'Talking' : 'Not talking';
 
   return (
@@ -118,6 +121,8 @@ export function DebugPanel({ host, disabled }: { host: SignalHost; disabled: boo
         <dd data-testid="processing">{processing}</dd>
         <dt>Camera hint</dt>
         <dd data-testid="validation">{validation}</dd>
+        <dt>Camera speed</dt>
+        <dd data-testid="fps">{fps === null ? 'No reading yet' : `${fps} frames a second (needs about 25)`}</dd>
         <dt>Talking</dt>
         <dd data-testid="talking">{talkingText}</dd>
         <dt>Trace samples</dt>

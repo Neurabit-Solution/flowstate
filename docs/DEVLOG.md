@@ -33,7 +33,7 @@
 
 **Verified with a fake camera feed (Chromium's `fake_device_0`, real API key)**
 - The key authenticated and the SDK reached Running. Validation reported no face, as expected, and no metrics arrived.
-- With no face, one run ended in SDK error 8 (`kProcessingFailed`, retryable) after about 10 s. The cause is not confirmed. If a real empty chair does the same, M1 must treat it as `away` and restart the session, not as a failure. Check this first in M1.
+- With no face, one run ended in SDK error 8 (`kProcessingFailed`, retryable) after about 10 s. (Later traced to frame rate, see the entry below.)
 - The camera now stops on the SDK error state instead of staying open.
 - A click on anything except the button leaves the camera off (30 s control run).
 
@@ -58,7 +58,7 @@
 
 **Verified by driving the app with a fake camera feed and an isolated profile**
 - Sample replay (talking interruption): warming up, available, focus, in a conversation, available, off. The camera stayed off throughout.
-- Live with no face: samples ran on schedule, each ended early by SDK error 8, and the state reached away at about 60 s. So an empty frame looks like this error, and the duty cycle treats it as retry next cycle.
+- Live with no face: samples ran on schedule, each ended early by SDK error 8, and the state reached away at about 60 s. (Wrong conclusion, see the frame rate entry below: the error came from the frame rate, not the empty frame.)
 - Key saved to the keychain was not readable as plain text. Delete all data removed settings.
 
 **Findings**
@@ -93,3 +93,13 @@ Second failure once the helper was set: `LaunchProcess: failed to execvp` cut of
 Third failure: `401 Invalid or missing API key`. The value saved during onboarding decrypted to 15 characters at most, judging by the 19 byte file, and it takes priority over `.env`. The `.env` key shows no 401s on a fake feed. Removed the saved value. The app now rejects implausible keys on save, says when Presage rejects the key, and has a replace field in Settings.
 
 Correction: reaching SDK status Running does not prove the key works, because the SDK reports Running and takes frames after a 401. Check for 401s in the SDK log instead.
+
+## 2026-11-06: SDK error 8 is frame rate, not an empty frame
+
+Subham's real camera session stopped after about 10 s, delivering about 10 fps. The native library contains the text "Frame rate stayed below the ... fps minimum for too long to measure reliably", and the docs ask for roughly 25 fps. The JS error only says "processing failed".
+
+Chromium's fake camera runs at 20 fps by default, which explains the earlier fake feed failures. With `--use-fake-device-for-media-stream=fps=30` the app ran 40 s at about 30 fps with no error and no face. So the pipeline holds 30 fps, and my earlier "an empty frame causes error 8" was wrong.
+
+Subham's webcam lists MJPG 1280x720 at 30 fps, so the likely cause is auto exposure slowing it down in low light. Not confirmed yet. The app now measures delivered frames per second, shows it in the live signal panel, and explains a slow camera.
+
+Use `fps=30` for all fake feed tests from now on.

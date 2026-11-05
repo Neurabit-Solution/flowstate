@@ -10,6 +10,11 @@ import type { SignalEvent, SignalListener, SignalSource } from './types';
 const MAX_HOLD_MS = 5 * 60_000;
 const DEMO_SCORE_EVERY_US = 5_000_000;
 const AUTH_FAILED = 2;
+const PROCESSING_FAILED = 8;
+/** The Presage docs ask for roughly 25 fps. */
+const MIN_FPS = 25;
+const LOW_FPS_NOTICE = (fps: number) =>
+  `The camera is delivering ${fps} frames a second, and the SDK needs about ${MIN_FPS}. It stops when frames stay this slow. More light usually fixes it, because webcams slow down in the dark.`;
 /** Sample recordings run faster than real time, so a focus block takes under a minute. */
 export const REPLAY_SPEED = 20;
 
@@ -23,6 +28,9 @@ export class SignalHost {
   private replayUnsub: (() => void) | null = null;
   private source: SensingSource = null;
   private recordMetrics = false;
+  private fps: number | null = null;
+  private lowFpsSeconds = 0;
+  private readonly fpsListeners = new Set<(fps: number) => void>();
   private recording = false;
   private telemetry = false;
   private readonly listeners = new Set<SignalListener>();
@@ -38,6 +46,7 @@ export class SignalHost {
       getApiKey: () => bridge.getApiKey(),
       enableTelemetry: () => this.telemetry,
       onStream: (stream) => this.streamListeners.forEach((l) => l(stream)),
+      onFrameRate: (fps) => this.onFrameRate(fps),
       onAutoStop: () => {
         this.message('notice', 'Camera stopped by the session limit.');
         void this.stopSensing();
@@ -82,6 +91,19 @@ export class SignalHost {
   onStream(listener: (s: MediaStream | null) => void): () => void {
     this.streamListeners.add(listener);
     return () => this.streamListeners.delete(listener);
+  }
+
+  onFps(listener: (fps: number) => void): () => void {
+    this.fpsListeners.add(listener);
+    return () => this.fpsListeners.delete(listener);
+  }
+
+  private onFrameRate(fps: number): void {
+    this.fps = fps;
+    this.fpsListeners.forEach((l) => l(fps));
+    this.lowFpsSeconds = fps < MIN_FPS ? this.lowFpsSeconds + 1 : 0;
+    // The first seconds are often slow while the camera settles.
+    if (this.lowFpsSeconds === 5) this.message('notice', LOW_FPS_NOTICE(fps));
   }
 
   setRecordMetrics(on: boolean): void {
@@ -160,6 +182,8 @@ export class SignalHost {
     if (features) this.bridge.sendFeatures(features);
     if (event.t === 'error' && this.source === 'live') {
       if (event.retryable) {
+        if (event.code === PROCESSING_FAILED && this.fps !== null && this.fps < MIN_FPS) this.message('error', LOW_FPS_NOTICE(this.fps));
+        else this.message('notice', `The SDK stopped (error ${event.code}). It will try again at the next sample.`);
         void this.duty.onRetryableError();
       } else {
         this.message('error', event.code === AUTH_FAILED ? 'Presage rejected the API key. Replace it in Settings.' : `SDK error ${event.code}: ${event.message}`);

@@ -23,6 +23,8 @@ export type LiveOptions = {
   /** The SDK defaults telemetry to on, so this is always passed explicitly. */
   enableTelemetry: () => boolean;
   onStream?: (stream: MediaStream | null) => void;
+  /** Frames per second the camera is actually delivering, about once a second. */
+  onFrameRate?: (fps: number) => void;
   /** Called when the session cap stops the camera by itself. */
   onAutoStop?: () => void;
 };
@@ -34,6 +36,7 @@ export class LiveSource implements SignalSource {
   private sdk: SmartSpectraSDK | null = null;
   private stream: MediaStream | null = null;
   private capTimer: ReturnType<typeof setTimeout> | null = null;
+  private fpsTimer: ReturnType<typeof setInterval> | null = null;
   private listeners = new Set<SignalListener>();
 
   constructor(private readonly options: LiveOptions) {}
@@ -77,6 +80,7 @@ export class LiveSource implements SignalSource {
     sdk.on('streamAvailable', (stream) => {
       this.stream = stream;
       this.options.onStream?.(stream);
+      this.watchFrameRate(stream);
     });
 
     try {
@@ -101,7 +105,21 @@ export class LiveSource implements SignalSource {
     }
   }
 
+  /** The SDK ends a session when frames arrive too slowly, without saying why in its error. */
+  private watchFrameRate(stream: MediaStream): void {
+    const track = stream.getVideoTracks()[0] as (MediaStreamTrack & { stats?: { deliveredFrames?: number } }) | undefined;
+    if (!track?.stats) return;
+    let last = track.stats.deliveredFrames ?? 0;
+    this.fpsTimer = setInterval(() => {
+      const now = track.stats?.deliveredFrames ?? last;
+      this.options.onFrameRate?.(now - last);
+      last = now;
+    }, 1000);
+  }
+
   private teardown(): void {
+    if (this.fpsTimer) clearInterval(this.fpsTimer);
+    this.fpsTimer = null;
     if (this.capTimer) clearTimeout(this.capTimer);
     this.capTimer = null;
     try {
