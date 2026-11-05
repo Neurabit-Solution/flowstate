@@ -87,3 +87,5 @@ Subham's `npm start` aborted with a Chromium SUID sandbox error on Ubuntu 26.04.
 - Test launches on Linux must run through `systemd-run --user`, or they miss this class of failure.
 
 **For M5:** judges on recent Ubuntu hit this too. An AppImage cannot set the SUID bit, so ship a `.deb` (its install script sets it) and test both from a normal session. Check that this is true of the electron-builder version we use.
+
+Second failure once the helper was set: `LaunchProcess: failed to execvp` cut off at the space in the project path, because Chromium's SUID path cannot handle spaces. On this machine Electron now lives in `~/.cache/flowstate-electron/dist`, linked back from `node_modules/electron/dist`. Tested from a normal session with `systemd-run --user`: the app stayed up until the test killed it. `scripts/launch.mjs` and the README now explain this.

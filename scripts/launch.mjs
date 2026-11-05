@@ -12,9 +12,11 @@ delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(electron, ['.', ...process.argv.slice(2)], { stdio: ['inherit', 'inherit', 'pipe'], env });
 
 let sandboxFailed = false;
+let spaceFailed = false;
 child.stderr.on('data', (chunk) => {
   process.stderr.write(chunk);
   if (String(chunk).includes('setuid_sandbox_host')) sandboxFailed = true;
+  if (String(chunk).includes('LaunchProcess: failed to execvp')) spaceFailed = true;
 });
 
 child.on('exit', (code, signal) => {
@@ -27,6 +29,15 @@ FlowState keeps the sandbox on rather than running without it. To allow it for t
   sudo chown root:root "${helper}" && sudo chmod 4755 "${helper}"
 
 Then run npm start again. Repeat this after any npm install that reinstalls Electron.
+`);
+  }
+  if (spaceFailed && electron.includes(' ')) {
+    console.error(`
+FlowState could not start: with the Linux sandbox helper, Electron cannot run from a folder with a space in its path:
+
+  ${electron}
+
+Move the project to a path without spaces, or move only Electron and link it back. That is what README.md describes.
 `);
   }
   process.exit(code ?? (signal ? 1 : 0));

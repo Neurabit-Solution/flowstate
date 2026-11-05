@@ -28,6 +28,12 @@ sudo chown root:root node_modules/electron/dist/chrome-sandbox && sudo chmod 475
 
 Repeat it after any `npm install` that reinstalls Electron.
 
+With that helper in use, Electron also cannot run from a path containing a space. Move the project, or keep it where it is and move only Electron:
+
+```bash
+mkdir -p ~/.cache/flowstate-electron && mv node_modules/electron/dist ~/.cache/flowstate-electron/dist && ln -s ~/.cache/flowstate-electron/dist node_modules/electron/dist
+```
+
 Scripts: `npm run dev` (rebuild on change, Ctrl+R to reload the window), `npm run lint`, `npm test`.
 
 ## Platforms
