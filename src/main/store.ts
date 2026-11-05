@@ -12,12 +12,14 @@ const today = () => new Date().toLocaleDateString('en-CA');
 export class Store {
   private readonly file: string;
   private readonly keyFile: string;
+  private readonly secretsFile: string;
   private data: Saved;
 
   constructor(private readonly dir: string) {
     mkdirSync(dir, { recursive: true });
     this.file = join(dir, 'settings.json');
     this.keyFile = join(dir, 'presage-key.bin');
+    this.secretsFile = join(dir, 'secrets.bin');
     this.data = this.load();
   }
 
@@ -83,8 +85,39 @@ export class Store {
     }
   }
 
+  private readSecrets(): Record<string, unknown> {
+    if (!existsSync(this.secretsFile)) return {};
+    try {
+      return JSON.parse(safeStorage.decryptString(readFileSync(this.secretsFile))) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+
+  getSecret<T>(name: string): T | undefined {
+    return this.readSecrets()[name] as T | undefined;
+  }
+
+  /** Same rule as the API key: refuse rather than store a token as plain text. */
+  setSecret(name: string, value: unknown): SaveKeyResult {
+    if (!safeStorage.isEncryptionAvailable() || usesPlainTextBackend()) {
+      return { ok: false, reason: 'No OS keychain is available, so this was not saved.' };
+    }
+    const all = { ...this.readSecrets(), [name]: value };
+    writeFileSync(this.secretsFile, safeStorage.encryptString(JSON.stringify(all)), { mode: 0o600 });
+    return { ok: true };
+  }
+
+  deleteSecret(name: string): void {
+    const all = this.readSecrets();
+    if (!(name in all)) return;
+    delete all[name];
+    writeFileSync(this.secretsFile, safeStorage.encryptString(JSON.stringify(all)), { mode: 0o600 });
+  }
+
   deleteAll(): void {
     rmSync(this.keyFile, { force: true });
+    rmSync(this.secretsFile, { force: true });
     rmSync(this.file, { force: true });
     this.data = { settings: { ...DEFAULT_SETTINGS }, usage: { day: today(), ms: 0 } };
   }

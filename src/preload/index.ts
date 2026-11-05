@@ -25,6 +25,13 @@ const bridge: FlowstateBridge = {
   reportSensing: (source, cameraOn) => ipcRenderer.send('flowstate:sensing', source, cameraOn),
   setOverride: (override, forMinutes) => ipcRenderer.send('flowstate:set-override', override, forMinutes),
   getStatus: () => ipcRenderer.invoke('flowstate:get-status'),
+  listIntegrations: () => ipcRenderer.invoke('flowstate:integrations-list'),
+  setIntegrationEnabled: (id, enabled) => ipcRenderer.invoke('flowstate:integration-enabled', id, enabled),
+  testIntegration: (id) => ipcRenderer.invoke('flowstate:integration-test', id),
+  saveSlackToken: (token) => ipcRenderer.invoke('flowstate:slack-token', token),
+  connectGoogle: (clientId, clientSecret) => ipcRenderer.invoke('flowstate:google-connect', clientId, clientSecret),
+  disconnectIntegration: (id) => ipcRenderer.invoke('flowstate:integration-disconnect', id),
+  integrationLog: () => ipcRenderer.invoke('flowstate:integration-log'),
   onStatus: (listener) => subscribe<AppStatus>('flowstate:status', listener),
   onCommand: (listener) => subscribe<SensingCommand>('flowstate:command', listener),
 };

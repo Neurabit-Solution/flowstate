@@ -6,6 +6,7 @@ import type { AppStatus, Features, Override, SensingCommand, SensingSource, Sett
 import { listRecordings, readRecording, RecorderHost } from '../signals/main-ipc';
 import type { SignalEvent } from '../signals/types';
 import { DEFAULT_MACHINE_CONFIG, DevStateMachine, type MachineConfig } from '../state/machine';
+import { IntegrationsHost } from './integrations-host';
 import { isCameraRequestAllowed } from './permissions';
 import { Store } from './store';
 import { AppTray } from './tray';
@@ -14,6 +15,8 @@ const PAGE_PATH = join(__dirname, '../renderer/index.html');
 const PAGE_URL = pathToFileURL(PAGE_PATH).href;
 const PRELOAD_PATH = join(__dirname, '../preload/index.js');
 const HEARTBEAT_MS = 5000;
+const INTEGRATION_TICK_MS = 5 * 60_000;
+const QUIT_RESTORE_TIMEOUT_MS = 5000;
 const DEMO = process.argv.includes('--demo');
 
 const NATIVE_LIB: Partial<Record<NodeJS.Platform, string>> = {
@@ -25,6 +28,7 @@ const NATIVE_LIB: Partial<Record<NodeJS.Platform, string>> = {
 let win: BrowserWindow | null = null;
 let tray: AppTray | null = null;
 let store: Store;
+let integrations: IntegrationsHost;
 let quitting = false;
 let sdkLoadError: string | null = null;
 let source: SensingSource = null;
@@ -57,6 +61,8 @@ function broadcast(): void {
   tray?.update(current);
   win?.webContents.send('flowstate:status', current);
   syncHold();
+  // Samples log what they would do. They never touch a real status or calendar.
+  void integrations?.manager.onState(current.state, current.source === 'replay');
 }
 
 function send(command: SensingCommand): void {
@@ -221,8 +227,9 @@ function registerIpc(): void {
     broadcast();
     return next;
   });
-  handle('flowstate:delete-local-data', () => {
+  handle('flowstate:delete-local-data', async () => {
     send({ type: 'stop-sensing' });
+    await integrations.deleteAll();
     recorder.stop();
     for (const name of readdirSync(liveDir, { withFileTypes: true })) {
       if (name.isFile() && /^live-.*\.jsonl$/.test(name.name)) rmSync(join(liveDir, name.name));
@@ -236,6 +243,13 @@ function registerIpc(): void {
   handle('flowstate:recorder-start', () => recorder.start(sdkVersion()));
   handle('flowstate:recorder-stop', () => recorder.stop());
   handle('flowstate:get-status', status);
+  handle('flowstate:integrations-list', () => integrations.info());
+  handle('flowstate:integration-enabled', (id: string, enabled: boolean) => integrations.setEnabled(id, enabled));
+  handle('flowstate:integration-test', (id: string) => integrations.test(id));
+  handle('flowstate:slack-token', (token: string) => integrations.saveSlackToken(token));
+  handle('flowstate:google-connect', (clientId: string, clientSecret: string) => integrations.connectGoogle(clientId, clientSecret));
+  handle('flowstate:integration-disconnect', (id: string) => integrations.disconnect(id));
+  handle('flowstate:integration-log', () => integrations.manager.entries);
   listen('flowstate:recorder-append', (payload: SignalEvent) => recorder.append(payload));
   listen('flowstate:features', (features: Features) => {
     if (source === null) return;
@@ -298,14 +312,24 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', showWindow);
-  app.on('before-quit', () => {
+  let restored = false;
+  app.on('before-quit', (event) => {
     quitting = true;
+    if (restored || !integrations) return;
+    // Put statuses and calendars back before leaving, but never hang on a slow network.
+    event.preventDefault();
+    restored = true;
+    const timeout = new Promise((resolve) => setTimeout(resolve, QUIT_RESTORE_TIMEOUT_MS));
+    void Promise.race([integrations.manager.shutdown(), timeout]).finally(() => app.quit());
   });
 
   void app.whenReady().then(() => {
     loadEnv();
     store = new Store(app.getPath('userData'));
     machine.setConfig(machineConfig(store.settings));
+    integrations = new IntegrationsHost(app.getPath('userData'), store, () => win?.webContents.send('flowstate:integrations-changed'));
+    void integrations.manager.recoverFromCrash();
+    setInterval(() => void integrations.manager.tick(), INTEGRATION_TICK_MS);
     session.defaultSession.setPermissionRequestHandler((wc, permission, callback, details) => {
       const media = details as { mediaTypes?: string[]; requestingUrl?: string };
       callback(

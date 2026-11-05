@@ -36,6 +36,8 @@ export type Settings = {
   dailyCapMinutes: number;
   /** Browser device id of the chosen camera. null lets the SDK pick its default. */
   cameraId: string | null;
+  /** Everything is off until the user turns it on. */
+  enabledIntegrations: Record<string, boolean>;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -46,6 +48,7 @@ export const DEFAULT_SETTINGS: Settings = {
   focusEnterMinutes: 10,
   dailyCapMinutes: 120,
   cameraId: null,
+  enabledIntegrations: {},
 };
 
 export type SensingCommand =
@@ -54,6 +57,10 @@ export type SensingCommand =
   | { type: 'set-hold'; hold: boolean };
 
 export type SaveKeyResult = { ok: true } | { ok: false; reason: string };
+
+export type IntegrationView = { id: string; label: string; enabled: boolean; ready: boolean };
+export type IntegrationTest = { ok: boolean; detail: string };
+export type IntegrationLogEntry = { ts: number; integration: string; action: string; ok: boolean; error?: string };
 
 /** The typed API the preload exposes as window.flowstate. */
 export type FlowstateBridge = {
@@ -73,6 +80,13 @@ export type FlowstateBridge = {
   reportSensing(source: SensingSource, cameraOn: boolean): void;
   setOverride(override: Override | null, forMinutes?: number): void;
   getStatus(): Promise<AppStatus>;
+  listIntegrations(): Promise<IntegrationView[]>;
+  setIntegrationEnabled(id: string, enabled: boolean): Promise<void>;
+  testIntegration(id: string): Promise<IntegrationTest>;
+  saveSlackToken(token: string): Promise<SaveKeyResult>;
+  connectGoogle(clientId: string, clientSecret: string): Promise<SaveKeyResult>;
+  disconnectIntegration(id: string): Promise<void>;
+  integrationLog(): Promise<IntegrationLogEntry[]>;
   onStatus(listener: (status: AppStatus) => void): () => void;
   onCommand(listener: (command: SensingCommand) => void): () => void;
 };

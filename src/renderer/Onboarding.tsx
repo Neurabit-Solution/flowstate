@@ -22,7 +22,7 @@ export function Onboarding({ host, settings, onDone, onSettings }: Props) {
           <h2>Protect your focus</h2>
           <ul className="consent">
             <li>Notices when you are in sustained focus, using your webcam and the Presage SmartSpectra SDK.</li>
-            <li>Later versions will quiet your notifications and tell your coding agents to wait.</li>
+            <li>Can quiet your notifications, set your Slack status and block your calendar while you focus, if you turn those on.</li>
             <li>Shows you when you focus best. Only you can see it.</li>
           </ul>
           <p className="strong">Not a medical device.</p>
@@ -38,11 +38,11 @@ export function Onboarding({ host, settings, onDone, onSettings }: Props) {
             <dt>Video</dt>
             <dd>Frames are processed on this computer by the SDK. FlowState never saves or uploads them.</dd>
             <dt>Stored here</dt>
-            <dd>Settings, your SDK minutes for the day, and your API key, encrypted by your OS keychain.</dd>
+            <dd>Settings, your SDK minutes for the day, a log of integration actions, and your API key and any account tokens, encrypted by your OS keychain.</dd>
             <dt>Never stored</dt>
             <dd>Video and images. Breathing values are stored only if you tick Save metrics in the live signal panel, in a local file you can delete.</dd>
             <dt>Network</dt>
-            <dd>The SDK connects to Presage to validate your API key and fetch the models it runs on this computer. FlowState adds no other network calls and no AI services.</dd>
+            <dd>The SDK connects to Presage to validate your API key and fetch the models it runs on this computer. FlowState adds no other network calls and no AI services, unless you connect Slack or Google Calendar. Then it calls only those services, and only to change your own status, Do Not Disturb and calendar.</dd>
             <dt>Deleting</dt>
             <dd>Settings has Delete all data. It removes everything listed above.</dd>
           </dl>

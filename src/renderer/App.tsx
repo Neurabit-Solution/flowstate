@@ -3,6 +3,7 @@ import type { AppStatus, DevState, Settings } from '../shared/types';
 import { CameraPreview, DebugPanel } from '../signals/debug-panel';
 import { REPLAY_SPEED, type HostMessage, type SignalHost } from '../signals/host';
 import { SAMPLE_LABEL } from '../signals/replay';
+import { IntegrationsPanel } from './Integrations';
 import { Onboarding } from './Onboarding';
 
 const bridge = () => window.flowstate;
@@ -118,6 +119,7 @@ function Home({ host, settings, onSettings }: { host: SignalHost; settings: Sett
   const [hasKey, setHasKey] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showIntegrations, setShowIntegrations] = useState(false);
   useEffect(() => {
     void bridge().hasApiKey().then(setHasKey);
   }, [settings]);
@@ -194,9 +196,11 @@ function Home({ host, settings, onSettings }: { host: SignalHost; settings: Sett
 
       <div className="controls">
         <button onClick={() => setShowDebug(!showDebug)}>{showDebug ? 'Hide live signal' : 'Show live signal'}</button>
+        <button onClick={() => setShowIntegrations(!showIntegrations)}>{showIntegrations ? 'Hide integrations' : 'Integrations'}</button>
         <button onClick={() => setShowSettings(!showSettings)}>{showSettings ? 'Hide settings' : 'Settings'}</button>
       </div>
       {showDebug && <DebugPanel host={host} disabled={live || replay} />}
+      {showIntegrations && <IntegrationsPanel status={status} />}
       {showSettings && <SettingsPanel settings={settings} onSettings={onSettings} locked={live} />}
     </main>
   );
@@ -261,7 +265,7 @@ function SettingsPanel({ settings, onSettings, locked }: { settings: Settings; o
         <button
           className="danger"
           onClick={() => {
-            if (window.confirm('Delete your saved API key, settings, SDK minutes and any saved metric files?')) {
+            if (window.confirm('Delete your saved API key, connected accounts, settings, SDK minutes and any saved metric files?')) {
               void bridge()
                 .deleteLocalData()
                 .then(() => bridge().getSettings().then(onSettings));

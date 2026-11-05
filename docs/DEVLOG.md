@@ -115,3 +115,20 @@ A 56 s live run with the camera moved and the chest in frame finished its full s
 **Problem found:** the trace is marked `stable` only from about 32 s, which matches the docs' 30 s window. The processor scores stable samples only, so a 60 s sample leaves about 23 s, too few breaths to score. `steady` stayed null, so automatic focus could never start on the default cadence. The generated recordings hid this because every sample in them is stable.
 
 **Next:** get a longer real recording, then choose between a longer default sample and a looser scoring rule. Generated recordings should also start with a 30 s unstable stretch, so tests catch this.
+
+## 2026-11-06: M2 integrations
+
+**Changed**
+- `integrations/manager.ts` calls each enabled integration on focus start and end. One failing never stops the rest, and everything is logged.
+- OS focus: GNOME through gsettings, macOS through two user-made shortcuts. Windows and other Linux desktops report that they are manual.
+- Slack: Do Not Disturb and status, with the previous status restored. Google Calendar: one busy block, extended during focus and ended at exit.
+- Anything changed is saved first and undone at quit or, after a crash, at next launch.
+
+**Decisions**
+- All integrations are off until turned on. Sample recordings log what they would do and never change anything.
+- Slack uses a pasted user token from the user's own Slack app rather than OAuth, because Slack requires an HTTPS redirect and that would need a hosted service. This differs from the spec.
+- Google needs the user's own OAuth desktop client for now. Shipping a shared one needs a Google project and its verification, which is Subham's call.
+- KDE is reported as manual, not built: I have no way to test it here, and the spec lists it as cuttable. Windows has no supported API, which the spec allows for.
+
+**Not verified yet**
+- All of it against real services. Tests use fakes, and nothing has run against a real Slack, Google account or real notification setting. macOS and Windows have not run at all.
