@@ -2,7 +2,7 @@
 
 Notices when you are in flow and protects it. Camera on only when you say so. Built on the Presage SmartSpectra SDK.
 
-Status: M0 scaffold. See `docs/SPEC.md` for the plan and `docs/DEVLOG.md` for progress.
+Status: M1 core loop. See `docs/SPEC.md` for the plan and `docs/DEVLOG.md` for progress.
 
 ## Run
 
@@ -14,7 +14,11 @@ cp .env.example .env   # then set PRESAGE_API_KEY
 npm start
 ```
 
-No key? Skip the `.env` step and click **Use sample recording**. It works without a key or a camera.
+You can also paste the key during onboarding, which stores it in your OS keychain.
+
+No key? Click **Use sample recording** during onboarding. It works without a key or a camera. The current samples are generated test data.
+
+`npm start -- --demo` shortens the focus threshold to 30 s.
 
 Scripts: `npm run dev` (rebuild on change, Ctrl+R to reload the window), `npm run lint`, `npm test`.
 

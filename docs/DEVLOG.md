@@ -42,5 +42,38 @@
 - Linux auto exposure reset after stop, which needs real hardware.
 
 **Not done yet**
-- `recordings/synthetic-smoke.jsonl` is generated test data. The real recordings the spec asks for need a person at the camera.
+- The `recordings/synthetic-*.jsonl` files are generated test data. The real recordings the spec asks for need a person at the camera.
 - `.env` holds the key for M0. Keychain storage arrives with onboarding in M1.
+
+## 2026-11-06: M1 core loop
+
+**Changed**
+- `signals/processor.ts`: metrics to yes/no features (present, talking, steady).
+- `state/machine.ts`: features to DevState with hysteresis, manual overrides and an immediate away on screen lock.
+- `signals/duty-cycle.ts`: 60 s every 5 min, staying on up to 5 min to confirm a change around focus. Counts SDK minutes per day.
+- `signals/host.ts`: runs the pipeline in the renderer, and only features cross to main.
+- Tray with state, camera-on ring, overrides, pause, stop and SDK minutes.
+- Consent onboarding, keychain storage for the key, settings, Delete all data.
+- `--demo` flag: focus after 30 s for the video. Use `npm start -- --demo`.
+
+**Verified by driving the app with a fake camera feed and an isolated profile**
+- Sample replay (talking interruption): warming up, available, focus, in a conversation, available, off. The camera stayed off throughout.
+- Live with no face: samples ran on schedule, each ended early by SDK error 8, and the state reached away at about 60 s. So an empty frame looks like this error, and the duty cycle treats it as retry next cycle.
+- Key saved to the keychain was not readable as plain text. Delete all data removed settings.
+
+**Findings**
+- SDK logs show it fetches encrypted model files from the network (`secure_model_loader`). So "validates the API key" was not the whole network story, and the consent screen now says so. The DEV post must say the same. Confirm the full list with Presage.
+- The expression model is fetched even though we do not request expressions.
+
+**Decisions**
+- Features crossing to main are yes/no. The steadiness score stays in `signals/`, which is stricter than the spec's 0..1 feature, and it keeps the "no raw values downstream" rule easy to check.
+- Only "no face" counts as absent. Bad lighting or a poor angle still means someone is there.
+- "Pause until tomorrow" is a plain stop with no timer, so the camera can never restart overnight on its own. Pauses of 15 min and 1 h do resume.
+- Sensing never restarts at launch. The choice is not remembered.
+- The baseline lives in memory for now, so it restarts with each launch.
+- Key saving refuses when Linux has no real keyring, rather than falling back to plain text.
+
+**Not verified yet**
+- Everything about real breathing data. Steadiness thresholds were only tested on generated recordings, so the 10 minute focus result says the logic works, not that it detects real focus.
+- The tray menu itself (the same code paths were driven from the window). Some GNOME setups hide tray icons, so closing the window while sensing shows a notification.
+- Screen lock handling, which needs a real lock.
