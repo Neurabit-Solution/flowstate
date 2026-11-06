@@ -9,6 +9,8 @@ export type MachineConfig = {
   awayAfterMs: number;
   /** Talking this long ends focus. */
   talkExitMs: number;
+  /** A conversation has pauses. It is over only after this long with no talking. */
+  talkPauseMs: number;
   /** Keep the SDK running when focus is this close, or when leaving it is in question. */
   confirmWindowMs: number;
 };
@@ -18,6 +20,7 @@ export const DEFAULT_MACHINE_CONFIG: MachineConfig = {
   focusExitMs: 2 * 60_000,
   awayAfterMs: 60_000,
   talkExitMs: 60_000,
+  talkPauseMs: 30_000,
   confirmWindowMs: 5 * 60_000,
 };
 
@@ -28,6 +31,7 @@ export class DevStateMachine {
   private overrideUntil: number | null = null;
   private absentSince: number | null = null;
   private talkingSince: number | null = null;
+  private lastTalkingAt = 0;
   private steadySince: number | null = null;
   private contrarySince: number | null = null;
   private lastTs = 0;
@@ -106,8 +110,12 @@ export class DevStateMachine {
     if (f.present === false) this.absentSince ??= ts;
     else if (f.present === true) this.absentSince = null;
 
-    if (f.talking === true && f.present !== false) this.talkingSince ??= ts;
-    else if (f.talking === false || f.present === false) this.talkingSince = null;
+    if (f.talking === true && f.present !== false) {
+      this.talkingSince ??= ts;
+      this.lastTalkingAt = ts;
+    } else if (f.present === false || (f.talking === false && ts - this.lastTalkingAt >= this.config.talkPauseMs)) {
+      this.talkingSince = null;
+    }
 
     if (f.steady === true && f.talking !== true && f.present !== false) {
       this.steadySince ??= ts;

@@ -187,3 +187,22 @@ A 56 s live run with the camera moved and the chest in frame finished its full s
 - Installing the `.deb` (needs sudo). macOS and Windows installers, and the camera on either.
 
 CI on Windows caught a real bug: `flowstate run` lost quoting, because the shell joins arguments as they are. A command's exit code came back as 0 when it should have been 3. Arguments are now quoted on Windows. Linux and macOS passed as they were.
+
+## 2026-11-06: Tuned on a real 10 minute session
+
+Subham recorded 601 s with no SDK error at 25 fps. It changed several things the generated data had hidden.
+
+| Finding | Change |
+|---|---|
+| Scores at different window lengths are not comparable (median 0.65 at 30 s, 0.20 at 120 s) | Every score uses one 30 s window, which fits in a 60 s sample after warm-up. **No longer samples needed, so no extra credits.** |
+| Comparing with the median marks half of quiet work as not steady | Steady now means not in the bottom quarter of the person's own scores, and talking does not feed the baseline |
+| Talking arrives in bursts: 10 to 37% of samples in conversation, 0 to 11% quiet | Threshold 15% over 30 s, and a conversation ends only after 30 s of no talking |
+| An empty chair reported "face too high" and "too bright", never "no face" | 5 s with no metrics in a running session now counts as absent |
+| The trace is marked unreliable during talking and movement | Past warm-up, under 50% reliable reads as not steady |
+| The steadiness result lingered between samples | It resets at the start of each sample |
+
+Generated recordings now copy this shape, and a test runs the default 60 s every 5 min cadence all the way to focus.
+
+Replaying the real session now gives: available, then in a conversation from 380 s to 530 s. With a 2 minute threshold, focus starts at 272 s and ends at 440 s because of the conversation. On default settings the first focus takes roughly 20 to 35 minutes, unless calibration fills the baseline earlier.
+
+**Limits:** one person, one session. It never reached the default 10 minutes of focus, because it was only about 6 minutes of quiet work. It never reached away either, because metrics were missing for only 54 s. The default cadence has only run on generated data, and on real data in a single 61 s sample. Real recordings stay out of the public repo, so these checks are not in the test suite.

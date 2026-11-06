@@ -16,7 +16,16 @@ function rng(seed) {
   };
 }
 
-/** segments: [{ seconds, face, talking, irregular }] */
+const WARM_UP_SECONDS = 32;
+const FRAME_RATE_LOW = 11;
+const FACE_TOO_HIGH = 15;
+
+/**
+ * Shaped like a real session: the trace is unreliable for the first 30 s, the SDK keeps
+ * reporting a low frame rate even at 25 fps, talking arrives in bursts, and when someone
+ * leaves the metrics stop while the hints say "face too high" rather than "no face".
+ * segments: [{ seconds, face, talking, irregular }]
+ */
 function generate(name, seed, segments) {
   const rand = rng(seed);
   const lines = [
@@ -30,25 +39,20 @@ function generate(name, seed, segments) {
     }),
     JSON.stringify({ t: 'processing', ts: START_US, status: 2 }),
     JSON.stringify({ t: 'processing', ts: START_US + 1000, status: 3 }),
-    JSON.stringify({ t: 'validation', ts: START_US + 2000, code: 0, hint: '' }),
   ];
   let second = 0;
   let phase = 0;
   let period = 4.6;
   let depth = 1;
-  let lastCode = 0;
   for (const seg of segments) {
     for (let i = 0; i < seg.seconds; i += 1) {
       second += 1;
       const ts = START_US + second * SECOND;
-      const code = seg.face ? 0 : 1;
-      // The live SDK repeats "no face" many times a second while nobody is in frame.
-      if (code !== lastCode || code !== 0) {
-        lines.push(JSON.stringify({ t: 'validation', ts: ts - 500_000, code, hint: '' }));
-        lastCode = code;
-      }
+      lines.push(JSON.stringify({ t: 'validation', ts: ts - 500_000, code: seg.face ? FRAME_RATE_LOW : FACE_TOO_HIGH, hint: '' }));
       if (!seg.face) continue;
       const upperTrace = [];
+      // Talking makes the trace unreliable, and the SDK marks it so.
+      const stable = second > WARM_UP_SECONDS && !seg.talking;
       for (let k = 0; k < SAMPLES_PER_SECOND; k += 1) {
         const sampleTs = ts - SECOND + (k * SECOND) / SAMPLES_PER_SECOND;
         const before = phase;
@@ -59,15 +63,16 @@ function generate(name, seed, segments) {
           period = 4.6 * (1 + (rand() - 0.5) * 2 * swing);
           depth = 1 + (rand() - 0.5) * 2 * swing;
         }
-        upperTrace.push({ ts: sampleTs, value: round(depth * Math.sin(phase)), stable: true });
+        upperTrace.push({ ts: sampleTs, value: round(depth * Math.sin(phase)), stable });
       }
       lines.push(
         JSON.stringify({
           t: 'metrics',
           ts,
           upperTrace,
-          rate: [{ ts, value: round(60 / period), stable: true, confidence: 80 }],
-          talking: [{ ts, detected: !!seg.talking, stable: true }],
+          rate: [{ ts, value: round(60 / period), stable, confidence: stable ? 60 : 20 }],
+          // Quiet work reads as talking now and then. Real sessions showed up to 11%.
+          talking: [{ ts, detected: seg.talking ? second % 3 === 0 : second % 50 === 0, stable: true }],
         }),
       );
     }

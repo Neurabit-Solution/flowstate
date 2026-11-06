@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { DevState, Features } from '../src/shared/types';
+import type { SignalEvent } from '../src/signals/types';
 import { SignalProcessor } from '../src/signals/processor';
 import { parseRecording } from '../src/signals/replay';
 import { DEFAULT_MACHINE_CONFIG, DevStateMachine } from '../src/state/machine';
@@ -56,6 +57,78 @@ describe('recordings through processor and state machine', () => {
   });
 });
 
+describe('default sampling, shaped like the real SDK', () => {
+  // 60 s every 5 min: each sample restarts the SDK, so only its last 28 s or so are reliable.
+  function sample(startMs: number, irregular: boolean, phaseSeed: number): SignalEvent[] {
+    const us = startMs * 1000;
+    const events: SignalEvent[] = [{ t: 'processing', ts: us, status: 3 }];
+    let phase = phaseSeed;
+    let period = 4.6;
+    let breath = 0;
+    for (let s = 1; s <= 60; s += 1) {
+      const ts = us + s * 1_000_000;
+      events.push({ t: 'validation', ts: ts - 500_000, code: 11, hint: '' });
+      const upperTrace = [];
+      for (let k = 0; k < 4; k += 1) {
+        phase += (2 * Math.PI) / (period * 4);
+        const now = Math.floor(phase / (2 * Math.PI));
+        if (now !== breath) {
+          breath = now;
+          period = 4.6 * (1 + (irregular ? (now % 3) - 1 : (now % 3) - 1) * (irregular ? 0.4 : 0.02));
+        }
+        upperTrace.push({ ts: ts - 1_000_000 + k * 250_000, value: Math.sin(phase), stable: s > 32 });
+      }
+      events.push({ t: 'metrics', ts, upperTrace, rate: [], talking: [{ ts, detected: false, stable: true }] });
+    }
+    events.push({ t: 'processing', ts: us + 60_500_000, status: 4 });
+    events.push({ t: 'processing', ts: us + 60_600_000, status: 1 });
+    return events;
+  }
+
+  it('reaches focus with the SDK off most of the time', () => {
+    const processor = new SignalProcessor();
+    const machine = new DevStateMachine();
+    const start = 1_800_000_000_000;
+    machine.start(start);
+    let focusAtMin: number | null = null;
+    for (let i = 0; i < 12 && focusAtMin === null; i += 1) {
+      const at = start + i * 5 * MIN;
+      // The first few samples are less regular, which gives the baseline something to compare with.
+      for (const event of sample(at, i < 3, i)) {
+        const features = processor.ingest(event);
+        if (features) machine.update(features);
+      }
+      for (let t = at + 65_000; t < at + 5 * MIN && focusAtMin === null; t += 5000) {
+        const { state } = machine.update({ ts: t, present: null, talking: null, steady: null });
+        if (state === 'focused') focusAtMin = (t - start) / MIN;
+      }
+    }
+    expect(processor.baselineReady).toBe(true);
+    expect(focusAtMin).not.toBeNull();
+    expect(focusAtMin!).toBeLessThan(35);
+  });
+
+  it('a session with no metrics reads as absent, whatever the hints say', () => {
+    const p = new SignalProcessor();
+    const us = 1_800_000_000_000_000;
+    p.ingest({ t: 'processing', ts: us, status: 3 });
+    p.ingest({ t: 'metrics', ts: us + 1_000_000, upperTrace: [], rate: [], talking: [{ ts: us + 1_000_000, detected: false, stable: true }] });
+    p.ingest({ t: 'validation', ts: us + 3_000_000, code: 11, hint: '' });
+    const before = p.ingest({ t: 'validation', ts: us + 5_000_000, code: 15, hint: '' });
+    expect(before?.present).toBe(true);
+    const after = p.ingest({ t: 'validation', ts: us + 7_000_000, code: 15, hint: '' });
+    expect(after?.present).toBe(false);
+  });
+
+  it('a stale reading does not carry into the next sample', () => {
+    const p = new SignalProcessor();
+    const us = 1_800_000_000_000_000;
+    for (const event of sample(us / 1000, false, 0)) p.ingest(event);
+    const features = p.ingest({ t: 'processing', ts: us + 300_000_000, status: 3 });
+    expect(features?.steady ?? null).toBeNull();
+  });
+});
+
 describe('state machine rules', () => {
   const f = (ts: number, over: Partial<Features> = {}): Features => ({ ts, present: true, talking: false, steady: true, ...over });
   const focused = () => {
@@ -87,6 +160,25 @@ describe('state machine rules', () => {
     expect(m.update(f(T + 2 * MIN, { steady: true })).state).toBe('focused');
     m.update(f(T + 3 * MIN, { steady: false }));
     expect(m.update(f(T + 5 * MIN, { steady: false })).state).toBe('available');
+  });
+
+  it('pauses in a conversation do not end it, and a real end does', () => {
+    const m = new DevStateMachine();
+    m.start(0);
+    m.update(f(0));
+    expect(m.update(f(1000, { talking: true, steady: null })).state).toBe('talking');
+    expect(m.update(f(11_000, { talking: false, steady: null })).state).toBe('talking');
+    expect(m.update(f(21_000, { talking: true, steady: null })).state).toBe('talking');
+    expect(m.update(f(40_000, { talking: false, steady: null })).state).toBe('talking');
+    expect(m.update(f(52_000, { talking: false, steady: null })).state).toBe('available');
+  });
+
+  it('a conversation with pauses still ends focus', () => {
+    const m = focused();
+    m.update(f(T + 1000, { talking: true }));
+    m.update(f(T + 20_000, { talking: false }));
+    m.update(f(T + 40_000, { talking: true }));
+    expect(m.update(f(T + 62_000, { talking: false })).state).toBe('talking');
   });
 
   it('carries the state forward when there is no reading', () => {

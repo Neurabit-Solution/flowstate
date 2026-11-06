@@ -4,18 +4,31 @@ import type { SignalEvent, TraceSample } from './types';
 
 const SECOND_US = 1_000_000;
 const PRESENCE_WINDOW_US = 20 * SECOND_US;
-const TALKING_WINDOW_US = 20 * SECOND_US;
-const TRACE_WINDOW_US = 120 * SECOND_US;
+// Tuned on a real 10 minute session. Talking shows up in bursts, so even real conversation
+// only reads as 10 to 37% of samples, against 0 to 11% while quiet.
+const TALKING_WINDOW_US = 30 * SECOND_US;
+// Scores are only comparable at one fixed length, and a 60 s sample has about 28 s of reliable
+// trace after the SDK's 30 s warm-up. So every score uses this same short window.
+const TRACE_WINDOW_US = 30 * SECOND_US;
+const MIN_SCORED_US = 20 * SECOND_US;
+const WARM_UP_US = 45 * SECOND_US;
+const MIN_STABLE_FRACTION = 0.5;
+/** The SDK sends metrics many times a second while it sees someone, and none when it does not. */
+const NO_SAMPLES_US = 5 * SECOND_US;
 const MIN_OBSERVED_US = 3 * SECOND_US;
 const MIN_TALKING_SAMPLES = 3;
 const PRESENT_FRACTION = 0.8;
-const TALKING_FRACTION = 0.3;
+const TALKING_FRACTION = 0.15;
 const SCORE_EVERY_US = 30 * SECOND_US;
 const EMIT_EVERY_US = SECOND_US;
 const MAX_TRACE_GAP_US = 2 * SECOND_US;
 const BASELINE_MEMORY = 240;
-const BASELINE_TOLERANCE = 0.02;
+const MIN_BASELINE_SCORES = 3;
+/** Steady means not in the bottom quarter of this person's own recent scores. */
+const BASELINE_PERCENTILE = 0.25;
 
+// In real use an empty chair mostly reported "face too high" or "too bright", not "no face".
+// So hints alone cannot say someone left, and a gap in the metrics does most of the work.
 const NO_FACE = 1;
 const RUNNING = 3;
 
@@ -28,11 +41,9 @@ function coefficientOfVariation(xs: number[]): number {
   return Math.sqrt(mean(xs.map((x) => (x - m) ** 2))) / Math.abs(m);
 }
 
-export function median(xs: number[]): number {
+export function percentile(xs: number[], p: number): number {
   const sorted = [...xs].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  const hi = sorted[mid] ?? 0;
-  return sorted.length % 2 ? hi : (hi + (sorted[mid - 1] ?? hi)) / 2;
+  return sorted[Math.floor((sorted.length - 1) * p)] ?? 0;
 }
 
 /**
@@ -89,12 +100,15 @@ export class SignalProcessor {
   private lastScoreAt = 0;
 
   private observing = false;
-  private faceOk = false;
+  private faceOk = true;
   private segmentStart = 0;
   private segments: { start: number; end: number; ok: boolean }[] = [];
 
   private talkingSamples: { ts: number; detected: boolean }[] = [];
   private trace: TraceSample[] = [];
+  private unstable: number[] = [];
+  private lastSampleTs = 0;
+  private sessionStart = 0;
   private scores: number[] = [];
   private steady: boolean | null = null;
 
@@ -103,7 +117,7 @@ export class SignalProcessor {
 
   /** True once there is enough history to compare against. */
   get baselineReady(): boolean {
-    return this.scores.length >= 4;
+    return this.scores.length >= MIN_BASELINE_SCORES;
   }
 
   /** Returns features at most once per second of signal time. */
@@ -111,13 +125,18 @@ export class SignalProcessor {
     this.latestTs = Math.max(this.latestTs, event.ts);
     switch (event.t) {
       case 'processing':
-        if (event.status === RUNNING) this.openSegment(event.ts);
-        else this.closeSegment(event.ts);
+        if (event.status === RUNNING) this.beginSession(event.ts);
+        else if (this.observing) {
+          // A short sample can end between ticks, and its last seconds are its best ones.
+          this.score();
+          this.closeSegment(event.ts);
+        }
         break;
       case 'validation':
         this.onValidation(event.code, event.ts);
         break;
       case 'metrics':
+        if (event.upperTrace.length > 0 || event.talking.length > 0) this.lastSampleTs = event.ts;
         for (const t of event.talking) this.talkingSamples.push({ ts: t.ts, detected: t.detected });
         this.addTrace(event.upperTrace);
         break;
@@ -128,6 +147,16 @@ export class SignalProcessor {
     if (this.latestTs - this.lastEmit < EMIT_EVERY_US) return null;
     this.lastEmit = this.latestTs;
     return this.features();
+  }
+
+  private beginSession(ts: number): void {
+    this.openSegment(ts);
+    this.sessionStart = ts;
+    this.faceOk = true;
+    this.lastSampleTs = ts;
+    this.lastScoreAt = ts;
+    // A reading from the last sample says nothing about now.
+    this.steady = null;
   }
 
   private onValidation(code: number, ts: number): void {
@@ -157,8 +186,9 @@ export class SignalProcessor {
   private addTrace(samples: TraceSample[]): void {
     for (const s of samples) {
       const last = this.trace[this.trace.length - 1];
-      // Slices can repeat a sample. Unstable samples are not worth judging.
-      if (s.stable && (!last || s.ts > last.ts)) this.trace.push(s);
+      // Slices can repeat a sample.
+      if (last && s.ts <= last.ts) continue;
+      this.trace.push(s);
     }
   }
 
@@ -166,12 +196,21 @@ export class SignalProcessor {
     this.lastScoreAt = this.latestTs;
     const cutoff = this.latestTs - TRACE_WINDOW_US;
     this.trace = this.trace.filter((s) => s.ts >= cutoff);
-    const score = regularityScore(this.trace);
-    if (score === null) {
-      this.steady = null;
+    const first = this.trace[0];
+    const last = this.trace[this.trace.length - 1];
+    if (!first || !last || last.ts - first.ts < MIN_SCORED_US) return;
+
+    const stable = this.trace.filter((s) => s.stable);
+    // Past warm-up, a mostly unreliable trace comes from moving or talking. Not steady.
+    if (stable.length / this.trace.length < MIN_STABLE_FRACTION) {
+      if (this.latestTs - this.sessionStart >= WARM_UP_US) this.steady = false;
       return;
     }
-    this.steady = this.baselineReady ? score >= median(this.scores) - BASELINE_TOLERANCE : null;
+    const score = regularityScore(stable);
+    if (score === null) return;
+    this.steady = this.baselineReady ? score >= percentile(this.scores, BASELINE_PERCENTILE) : null;
+    // Talking moves the chest too, and must not lower the bar for quiet work.
+    if (this.talking(this.latestTs) === true) return;
     this.scores.push(score);
     if (this.scores.length > BASELINE_MEMORY) this.scores.shift();
   }
@@ -182,6 +221,7 @@ export class SignalProcessor {
   }
 
   private present(now: number): boolean | null {
+    if (this.observing && now - this.lastSampleTs >= NO_SAMPLES_US) return false;
     const from = now - PRESENCE_WINDOW_US;
     this.segments = this.segments.filter((s) => s.end >= from);
     const all = this.observing ? [...this.segments, { start: this.segmentStart, end: now, ok: this.faceOk }] : this.segments;
